@@ -4,16 +4,9 @@ import ProtectedRoute from './ProtectedRoute'
 import Login from './Login'
 import Register from './Register'
 import CandidateLayout from './CandidateLayout'
-
-function HrPage() {
-  return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-8">
-      <h1 className="text-2xl font-semibold text-slate-800">
-        İnsan Kaynakları Paneli
-      </h1>
-    </div>
-  )
-}
+import HRLayout from './HRLayout'
+import HRJobs from './HRJobs'
+import HRApplications from './HRApplications'
 
 function ManagerPage() {
   return (
@@ -63,7 +56,8 @@ export default function App() {
             <CandidateLayout />
           </ProtectedRoute>
         }>
-          <Route index element={
+          <Route index element={<Navigate to="/candidate/posts" replace />} />
+          <Route path="posts" element={
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
               <h2 className="text-xl font-semibold text-slate-800 mb-4">
                 İlanlar
@@ -85,13 +79,18 @@ export default function App() {
           } />
         </Route>
 
-        {/* Protected role-specific panels */}
+        {/* Protected HR routes with nested routing */}
         <Route path="/hr" element={
           <ProtectedRoute allowedRoles={['HR']}>
-            <HrPage />
+            <HRLayout />
           </ProtectedRoute>
-        } />
+        }>
+          <Route index element={<Navigate to="/hr/jobs" replace />} />
+          <Route path="jobs" element={<HRJobs />} />
+          <Route path="applications" element={<HRApplications />} />
+        </Route>
 
+        {/* Protected role-specific panels */}
         <Route path="/manager" element={
           <ProtectedRoute allowedRoles={['MNGR']}>
             <ManagerPage />

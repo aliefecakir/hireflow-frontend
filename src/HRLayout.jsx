@@ -4,7 +4,7 @@ import Sidebar from './Sidebar'
 import { useAuth } from './AuthContext'
 import { supabase } from './supabaseClient'
 
-export default function CandidateLayout() {
+export default function HRLayout() {
   const [userName, setUserName] = useState('')
   const [loading, setLoading] = useState(true)
   const [showProfileMenu, setShowProfileMenu] = useState(false)
@@ -14,7 +14,7 @@ export default function CandidateLayout() {
   const menuItems = [
     {
       name: 'İlanlar',
-      path: '/candidate/posts',
+      path: '/hr/jobs',
       icon: (
         <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
           <path strokeLinecap="round" strokeLinejoin="round" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
@@ -22,8 +22,8 @@ export default function CandidateLayout() {
       ),
     },
     {
-      name: 'Başvurularım',
-      path: '/candidate/applications',
+      name: 'Başvurular',
+      path: '/hr/applications',
       icon: (
         <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -73,7 +73,7 @@ export default function CandidateLayout() {
       <header className="w-full bg-white border-b border-gray-200 flex-shrink-0 shadow-sm">
         <div className="px-6 py-4 flex items-center justify-between">
           {/* Left Side - Logo */}
-          <Link to="/candidate/posts" className="flex items-center space-x-2 group">
+          <Link to="/hr/jobs" className="flex items-center space-x-2 group">
             <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg flex items-center justify-center shadow-sm group-hover:shadow-md transition-shadow">
               <span className="text-white font-bold text-sm">HF</span>
             </div>
@@ -89,7 +89,7 @@ export default function CandidateLayout() {
               onClick={() => setShowProfileMenu(!showProfileMenu)}
             >
               {/* Profile Picture */}
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-sm">
+              <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-full flex items-center justify-center shadow-sm">
                 <span className="text-white font-semibold text-sm">
                   {loading ? '...' : userName.charAt(0).toUpperCase()}
                 </span>
@@ -97,8 +97,9 @@ export default function CandidateLayout() {
               
               {/* Welcome Text */}
               <div className="flex flex-col">
+                <span className="text-xs text-slate-500">İnsan Kaynakları</span>
                 <span className="text-sm font-medium text-slate-800">
-                  {loading ? 'Yükleniyor...' : `Hoşgeldin ${userName}`}
+                  {loading ? 'Yükleniyor...' : userName}
                 </span>
               </div>
 

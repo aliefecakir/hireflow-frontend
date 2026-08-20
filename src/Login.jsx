@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from './supabaseClient'
 
 const ROLE_ROUTES = {
-  CAND: '/candidate',
+  CAND: '/candidate/posts',
   HR: '/hr',
   MNGR: '/manager',
 }
