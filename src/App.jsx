@@ -5,6 +5,7 @@ import Login from './Login'
 import Register from './Register'
 import CandidateLayout from './CandidateLayout'
 import CandidateJobs from './CandidateJobs'
+import CandidateProfile from './CandidateProfile'
 import HRLayout from './HRLayout'
 import HRJobs from './HRJobs'
 import HRApplications from './HRApplications'
@@ -59,6 +60,7 @@ export default function App() {
         }>
           <Route index element={<Navigate to="/candidate/posts" replace />} />
           <Route path="posts" element={<CandidateJobs />} />
+          <Route path="profile" element={<CandidateProfile />} />
           <Route path="applications" element={
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
               <h2 className="text-xl font-semibold text-slate-800 mb-4">
