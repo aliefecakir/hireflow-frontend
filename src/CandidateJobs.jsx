@@ -1,14 +1,32 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
+import { useAuth } from './AuthContext'
 
 export default function CandidateJobs() {
+  const { user } = useAuth()
+  const authUserId = user?.id
+
   const [jobs, setJobs] = useState([])
   const [loading, setLoading] = useState(true)
   const [expandedJobId, setExpandedJobId] = useState(null)
+  const [appliedPostIds, setAppliedPostIds] = useState([])
+  const [applyingPostId, setApplyingPostId] = useState(null)
+  const [message, setMessage] = useState({ type: '', text: '' })
 
   useEffect(() => {
     fetchActiveJobs()
   }, [])
+
+  useEffect(() => {
+    if (!authUserId) return
+    fetchAppliedPosts(authUserId)
+  }, [authUserId])
+
+  useEffect(() => {
+    if (!message.text) return
+    const timer = setTimeout(() => setMessage({ type: '', text: '' }), 4000)
+    return () => clearTimeout(timer)
+  }, [message])
 
   const fetchActiveJobs = async () => {
     try {
@@ -55,12 +73,95 @@ export default function CandidateJobs() {
     }
   }
 
+  const fetchAppliedPosts = async (userId) => {
+    try {
+      const { data, error } = await supabase
+        .from('APP')
+        .select('POST_ID')
+        .eq('CNDT_ID', userId)
+
+      if (error) {
+        console.error('Error fetching applications:', error)
+        return
+      }
+
+      setAppliedPostIds((data || []).map((row) => row.POST_ID))
+    } catch (error) {
+      console.error('Error fetching applications:', error)
+    }
+  }
+
   const toggleDetails = (jobId) => {
     setExpandedJobId(expandedJobId === jobId ? null : jobId)
   }
 
-  const handleApply = () => {
-    console.log('Başvur clicked')
+  const handleApply = async (postId) => {
+    if (!authUserId || applyingPostId) return
+
+    try {
+      setApplyingPostId(postId)
+
+      // Step A: Profile completion check
+      const { data: profile, error: profileError } = await supabase
+        .from('PROFILE')
+        .select('IS_CMPLTD')
+        .eq('USER_ID', authUserId)
+        .maybeSingle()
+
+      if (profileError) throw profileError
+
+      if (profile?.IS_CMPLTD !== 1) {
+        setMessage({
+          type: 'warning',
+          text: 'Lütfen başvurmadan önce profilinizi %100 tamamlayın.',
+        })
+        return
+      }
+
+      // Step B: Duplicate check
+      if (appliedPostIds.includes(postId)) {
+        return
+      }
+
+      // Step C: Get initial status ID ("Başvuru Alındı")
+      const { data: statusData, error: statusError } = await supabase
+        .from('GNL_ST')
+        .select('GNL_ST_ID')
+        .eq('ENT_CODE_NAME', 'APP')
+        .eq('SHRT_CODE', 'DISPATCHED')
+        .single()
+
+      if (statusError) throw statusError
+
+      const statusId = statusData.GNL_ST_ID
+
+      // Step D: Insert application
+      const { error: insertError } = await supabase
+        .from('APP')
+        .insert({
+          POST_ID: postId,
+          CNDT_ID: authUserId,
+          ST_ID: statusId,
+          CUSER: authUserId,
+        })
+
+      if (insertError) throw insertError
+
+      // Step E: UI update & feedback
+      setAppliedPostIds((prev) => [...prev, postId])
+      setMessage({
+        type: 'success',
+        text: 'Başvurunuz başarıyla alındı!',
+      })
+    } catch (error) {
+      console.error('Error applying to job:', error)
+      setMessage({
+        type: 'error',
+        text: error.message || 'Başvuru sırasında bir hata oluştu.',
+      })
+    } finally {
+      setApplyingPostId(null)
+    }
   }
 
   if (loading) {
@@ -82,6 +183,20 @@ export default function CandidateJobs() {
         <p className="text-sm text-slate-600 mt-1">Aktif iş ilanlarını görüntüleyin ve başvurun</p>
       </div>
 
+      {message.text && (
+        <div
+          className={`rounded-lg px-4 py-3 text-sm font-medium ${
+            message.type === 'success'
+              ? 'bg-green-50 text-green-800 border border-green-200'
+              : message.type === 'warning'
+                ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                : 'bg-red-50 text-red-800 border border-red-200'
+          }`}
+        >
+          {message.text}
+        </div>
+      )}
+
       {/* Job List */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         {jobs.length === 0 ? (
@@ -97,6 +212,7 @@ export default function CandidateJobs() {
             <h3 className="text-lg font-semibold text-slate-800 mb-4">Mevcut İlanlar ({jobs.length})</h3>
             {jobs.map((job) => {
               const isExpanded = expandedJobId === job.POST_ID
+              const hasApplied = appliedPostIds.includes(job.POST_ID)
               return (
                 <div 
                   key={job.POST_ID} 
@@ -159,12 +275,24 @@ export default function CandidateJobs() {
                   {/* Expanded Section: Apply Button Only */}
                   {isExpanded && (
                     <div className="mt-4 pt-4 border-t border-slate-200">
-                      <button
-                        onClick={handleApply}
-                        className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-sm hover:shadow-md transition-all duration-200"
-                      >
-                        Başvur
-                      </button>
+                      {hasApplied ? (
+                        <button
+                          type="button"
+                          disabled
+                          className="px-6 py-2 bg-slate-300 text-slate-600 font-medium rounded-lg cursor-not-allowed"
+                        >
+                          Başvuruldu
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleApply(job.POST_ID)}
+                          disabled={applyingPostId === job.POST_ID}
+                          className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-wait text-white font-medium rounded-lg shadow-sm hover:shadow-md transition-all duration-200"
+                        >
+                          {applyingPostId === job.POST_ID ? 'Gönderiliyor...' : 'Başvur'}
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

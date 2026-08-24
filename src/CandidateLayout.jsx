@@ -4,8 +4,12 @@ import Sidebar from './Sidebar'
 import { useAuth } from './AuthContext'
 import { supabase } from './supabaseClient'
 
+export const PROFILE_PHOTO_CHANGED_EVENT = 'profile-photo-changed'
+
 export default function CandidateLayout() {
   const [userName, setUserName] = useState('')
+  const [photoUrl, setPhotoUrl] = useState('')
+  const [photoRevision, setPhotoRevision] = useState(Date.now())
   const [loading, setLoading] = useState(true)
   const [showProfileMenu, setShowProfileMenu] = useState(false)
   const { signOut } = useAuth()
@@ -46,6 +50,15 @@ export default function CandidateLayout() {
     fetchUserData()
   }, [])
 
+  useEffect(() => {
+    const handlePhotoChange = (event) => {
+      setPhotoUrl(event.detail?.photoUrl || '')
+      setPhotoRevision(event.detail?.revision || Date.now())
+    }
+    window.addEventListener(PROFILE_PHOTO_CHANGED_EVENT, handlePhotoChange)
+    return () => window.removeEventListener(PROFILE_PHOTO_CHANGED_EVENT, handlePhotoChange)
+  }, [])
+
   const fetchUserData = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser()
@@ -55,11 +68,20 @@ export default function CandidateLayout() {
           .from('USER')
           .select('NAME')
           .eq('USER_ID', user.id)
-          .single()
+          .maybeSingle()
 
         if (data && !error) {
           setUserName(data.NAME)
         }
+
+        const { data: profile } = await supabase
+          .from('PROFILE')
+          .select('PRFL_PHT_URL')
+          .eq('USER_ID', user.id)
+          .maybeSingle()
+
+        setPhotoUrl(profile?.PRFL_PHT_URL || '')
+        setPhotoRevision(Date.now())
       }
     } catch (error) {
       console.error('Error fetching user data:', error)
@@ -99,10 +121,19 @@ export default function CandidateLayout() {
               onClick={() => setShowProfileMenu(!showProfileMenu)}
             >
               {/* Profile Picture */}
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-sm">
-                <span className="text-white font-semibold text-sm">
-                  {loading ? '...' : userName.charAt(0).toUpperCase()}
-                </span>
+              <div className="w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm flex-shrink-0">
+                {photoUrl ? (
+                  <img
+                    key={`${photoUrl}-${photoRevision}`}
+                    src={photoUrl ? `${photoUrl.split('?')[0]}?v=${photoRevision}` : ''}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <span className="text-white font-semibold text-sm">
+                    {loading ? '...' : userName.charAt(0).toUpperCase()}
+                  </span>
+                )}
               </div>
               
               {/* Welcome Text */}

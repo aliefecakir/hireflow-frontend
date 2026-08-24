@@ -3,6 +3,22 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from './AuthContext'
 import { supabase } from './supabaseClient'
 
+function toTitleCaseName(value) {
+  return (value || '')
+    .trim()
+    .split(/\s+/)
+    .map((part) =>
+      part
+        .split('-')
+        .map((word) => {
+          if (!word) return word
+          return word.charAt(0).toLocaleUpperCase('tr-TR') + word.slice(1).toLocaleLowerCase('tr-TR')
+        })
+        .join('-')
+    )
+    .join(' ')
+}
+
 export default function Register() {
   const [firstName, setFirstName] = useState('')
   const [surname, setSurname] = useState('')
@@ -55,8 +71,8 @@ export default function Register() {
           .insert([
             {
               USER_ID: authData.user.id,
-              NAME: firstName,
-              SURNAME: surname,
+              NAME: toTitleCaseName(firstName),
+              SURNAME: toTitleCaseName(surname),
               EMAIL: email,
               CUSER: authData.user.id
             }
