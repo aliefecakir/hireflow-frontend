@@ -1,6 +1,9 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './AuthContext'
 import ProtectedRoute from './ProtectedRoute'
+import AuthLayout from './AuthLayout'
+import PortalSelection from './PortalSelection'
+import Academy from './Academy'
 import Login from './Login'
 import Register from './Register'
 import CandidateLayout from './CandidateLayout'
@@ -25,33 +28,31 @@ export default function App() {
   return (
     <AuthProvider>
       <Routes>
-        {/* Root path automatically redirects to /login */}
-        <Route path="/" element={<Navigate to="/login" replace />} />
-        
+        {/* Landing page where users pick a portal */}
+        <Route path="/" element={<PortalSelection />} />
+
         {/* Auth routes with decorative background */}
         <Route path="/login" element={
-          <div className="relative min-h-screen w-full flex items-center justify-center overflow-hidden bg-slate-950">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-indigo-900/40 via-slate-950 to-slate-950" />
-            <div className="absolute top-1/4 -left-1/4 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl" />
-            <div className="absolute bottom-1/4 -right-1/4 w-96 h-96 bg-fuchsia-500/10 rounded-full blur-3xl" />
-            <div className="absolute inset-0 bg-[linear-gradient(to_right,#0f172a_1px,transparent_1px),linear-gradient(to_bottom,#0f172a_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] opacity-30" />
-            <div className="relative z-10 w-full flex items-center justify-center p-4">
-              <Login />
-            </div>
-          </div>
+          <AuthLayout>
+            <Login />
+          </AuthLayout>
+        } />
+
+        {/* HR login reuses the shared form; the role lookup redirects HR users to /hr */}
+        <Route path="/hr/login" element={
+          <AuthLayout>
+            <Login />
+          </AuthLayout>
         } />
         
         <Route path="/register" element={
-          <div className="relative min-h-screen w-full flex items-center justify-center overflow-hidden bg-slate-950">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-indigo-900/40 via-slate-950 to-slate-950" />
-            <div className="absolute top-1/4 -left-1/4 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl" />
-            <div className="absolute bottom-1/4 -right-1/4 w-96 h-96 bg-fuchsia-500/10 rounded-full blur-3xl" />
-            <div className="absolute inset-0 bg-[linear-gradient(to_right,#0f172a_1px,transparent_1px),linear-gradient(to_bottom,#0f172a_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] opacity-30" />
-            <div className="relative z-10 w-full flex items-center justify-center p-4">
-              <Register />
-            </div>
-          </div>
+          <AuthLayout>
+            <Register />
+          </AuthLayout>
         } />
+
+        {/* Academy portal is public, no registration required */}
+        <Route path="/academy" element={<Academy />} />
         
         {/* Protected Candidate routes with nested routing */}
         <Route path="/candidate" element={
@@ -83,8 +84,8 @@ export default function App() {
           </ProtectedRoute>
         } />
         
-        {/* Catch-all route redirecting back to login */}
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        {/* Catch-all route redirecting back to portal selection */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AuthProvider>
   )

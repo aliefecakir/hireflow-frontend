@@ -54,37 +54,23 @@ export default function Register() {
     setMessage('')
 
     try {
-      // 1. Supabase Auth sistemine e-posta ve şifre ile kayıt
       const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: email,
-        password: password,
+        email,
+        password,
+        options: {
+          data: {
+            name: toTitleCaseName(firstName),
+            surname: toTitleCaseName(surname),
+          },
+        },
       })
 
       if (authError) {
         throw new Error(authError.message)
       }
 
-      // 2. Kayıt başarılıysa, Auth'tan dönen ID ile 'USER' tablomuza profil verilerini yazma
       if (authData?.user) {
-        const { error: dbError } = await supabase
-          .from('USER')
-          .insert([
-            {
-              USER_ID: authData.user.id,
-              NAME: toTitleCaseName(firstName),
-              SURNAME: toTitleCaseName(surname),
-              EMAIL: email,
-              CUSER: authData.user.id
-            }
-          ])
-
-        if (dbError) {
-          throw new Error('Auth successful, but profile creation failed: ' + dbError.message)
-        }
-
         setMessage('Account created successfully! You can now log in.')
-        
-        // Formu temizle
         setFirstName('')
         setSurname('')
         setEmail('')

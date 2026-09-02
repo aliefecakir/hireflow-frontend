@@ -73,8 +73,8 @@ const getAuthUserId = async () => {
 }
 
 // Dil Ekle'nin solundaki hızlı ekleme dilleri LANG.NAME ile eşleştirilir.
-// Türkçe yabancı dil olmadığı için bu listede yoktur.
 const POPULAR_LANG_NAMES = [
+  'Türkçe',
   'İngilizce',
   'Almanca',
   'Fransızca',
@@ -82,11 +82,6 @@ const POPULAR_LANG_NAMES = [
 ]
 
 const toLang = (row) => ({ id: row.LANG_ID, name: row.NAME })
-
-const isTurkish = (name) => {
-  const normalized = (name || '').trim().toLocaleLowerCase('tr-TR')
-  return normalized === 'türkçe' || normalized === 'turkish'
-}
 
 const DEPARTMENT_OPTIONS = (departmentCatalog || [])
   .map((row) => (row?.DEPARTMENT || '').trim())
@@ -874,7 +869,7 @@ export default function CandidateProfile() {
           toLang
         )
         if (cancelled) return
-        setLanguages(loadedLanguages.filter((lang) => !isTurkish(lang.name)))
+        setLanguages(loadedLanguages)
       } catch (error) {
         if (cancelled) return
         console.error('Error loading profile data:', error)
@@ -1096,7 +1091,7 @@ export default function CandidateProfile() {
   }
 
   const addLanguage = (lang) => {
-    if (!lang || isTurkish(lang.name)) return
+    if (!lang) return
     setLanguages((prev) => (prev.some((item) => item.id === lang.id) ? prev : [...prev, lang]))
     if (errors.langIds) setErrors({ ...errors, langIds: '' })
   }
@@ -1753,10 +1748,10 @@ export default function CandidateProfile() {
 
         {/* Languages */}
         <fieldset className="space-y-5">
-          <legend className="text-base font-semibold text-slate-800 mb-3">Yabancı Diller</legend>
+          <legend className="text-base font-semibold text-slate-800 mb-3">Bilinen Diller</legend>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">
-              Bilinen Yabancı Diller <span className="text-red-500">*</span>
+              Bilinen Diller <span className="text-red-500">*</span>
             </label>
             <div className={`flex flex-wrap gap-2 rounded-lg border px-3 py-2.5 min-h-[46px] bg-white ${errors.langIds ? 'border-red-300' : 'border-gray-300'}`}>
               {languages.map((lang) => (
@@ -1883,7 +1878,7 @@ export default function CandidateProfile() {
         onClose={() => setLangModalOpen(false)}
         selected={languages}
         onSaved={(savedLanguages) => {
-          setLanguages(savedLanguages.filter((lang) => !isTurkish(lang.name)))
+          setLanguages(savedLanguages)
           if (errors.langIds) setErrors({ ...errors, langIds: '' })
         }}
       />

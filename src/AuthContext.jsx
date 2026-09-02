@@ -28,7 +28,8 @@ export const AuthProvider = ({ children }) => {
         .from('USER_ROLE')
         .select('GNL_TP(SHRT_CODE)')
         .eq('USER_ID', userId)
-        .single()
+        .limit(1)
+        .maybeSingle()
 
       if (error) {
         console.error('Error fetching user role:', error)

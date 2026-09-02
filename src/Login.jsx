@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { ArrowLeft, Home } from 'lucide-react'
 import { supabase } from './supabaseClient'
 
 const ROLE_ROUTES = {
@@ -13,10 +14,15 @@ async function fetchRoleRoute(userId) {
     .from('USER_ROLE')
     .select('GNL_TP(SHRT_CODE)')
     .eq('USER_ID', userId)
-    .single()
+    .limit(1)
+    .maybeSingle()
 
   if (error) {
     throw error
+  }
+
+  if (!data) {
+    throw new Error('Hesabınıza tanımlı bir rol bulunamadı.')
   }
 
   const shortCode = data?.GNL_TP?.SHRT_CODE
@@ -32,11 +38,58 @@ async function fetchRoleRoute(userId) {
 export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [rememberMe, setRememberMe] = useState(false)
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const navigate = useNavigate()
+  const redirectingRef = useRef(false)
+
+  const redirectByRole = useCallback(async (userId) => {
+    if (!userId || redirectingRef.current) return
+    redirectingRef.current = true
+
+    try {
+      const route = await fetchRoleRoute(userId)
+      navigate(route, { replace: true })
+    } catch (err) {
+      redirectingRef.current = false
+      setMessage(err.message || 'Hesabınıza tanımlı bir rol bulunamadı.')
+      setLoading(false)
+    }
+  }, [navigate])
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+    const oauthError =
+      params.get('error_description') ||
+      params.get('error') ||
+      hashParams.get('error_description') ||
+      hashParams.get('error')
+
+    if (oauthError) {
+      setMessage(oauthError)
+    }
+
+    const redirectIfSignedIn = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.user) {
+        await redirectByRole(session.user.id)
+      }
+    }
+
+    redirectIfSignedIn()
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user) {
+          redirectByRole(session.user.id)
+        }
+      }
+    )
+
+    return () => subscription.unsubscribe()
+  }, [redirectByRole])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -53,11 +106,31 @@ export default function Login() {
         throw error
       }
 
-      const route = await fetchRoleRoute(data.user.id)
-      navigate(route, { replace: true })
-
+      await redirectByRole(data.user.id)
     } catch (err) {
       setMessage(err.message || 'Invalid email or password.')
+      setLoading(false)
+    }
+  }
+
+  const handleMicrosoftSignIn = async () => {
+    setLoading(true)
+    setMessage('')
+
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'azure',
+        options: {
+          scopes: 'email profile',
+          redirectTo: `${window.location.origin}${window.location.pathname}`,
+        },
+      })
+
+      if (error) {
+        throw error
+      }
+    } catch (err) {
+      setMessage(err.message || 'Microsoft ile giriş başlatılamadı.')
       setLoading(false)
     }
   }
@@ -65,10 +138,17 @@ export default function Login() {
   return (
     <div className="fixed inset-0 bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4 overflow-y-auto">
       <div className="w-full max-w-md bg-white border border-slate-100 shadow-xl rounded-xl p-10 md:p-12">
+        <Link
+          to="/"
+          className="inline-flex items-center gap-1.5 w-fit mb-6 text-sm font-medium text-slate-500 hover:text-blue-600 transition-colors"
+        >
+          <ArrowLeft size={18} />
+          <Home size={18} />
+          Portala Dön
+        </Link>
         <div className="mb-6">
           <h1 className="text-2xl font-extrabold text-slate-950 mb-1 tracking-tight">HireFlow</h1>
-          <h2 className="text-lg font-semibold text-slate-900 mb-1">Welcome back</h2>
-          <p className="text-sm text-slate-500">Enter your details to access your HireFlow account</p>
+          <h2 className="text-lg font-slate-900 mb-1">Welcome back</h2>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -139,19 +219,6 @@ export default function Login() {
             </div>
           </div>
 
-          <div className="flex items-center">
-            <input
-              id="rememberMe"
-              type="checkbox"
-              checked={rememberMe}
-              onChange={(e) => setRememberMe(e.target.checked)}
-              className="h-4 w-4 text-blue-700 border-slate-300 rounded focus:ring-blue-500"
-            />
-            <label htmlFor="rememberMe" className="ml-2 text-sm text-slate-500 cursor-pointer select-none">
-              Remember me
-            </label>
-          </div>
-
           <button
             type="submit"
             disabled={loading}
@@ -160,6 +227,31 @@ export default function Login() {
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
+
+        <div className="relative my-5">
+          <div className="absolute inset-0 flex items-center" aria-hidden="true">
+            <div className="w-full border-t border-slate-200" />
+          </div>
+          <div className="relative flex justify-center">
+            <span className="bg-white px-3 text-xs font-medium text-slate-400">or</span>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleMicrosoftSignIn}
+          disabled={loading}
+          className="w-full py-2 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 font-medium rounded-lg text-sm disabled:opacity-50 transition-all duration-200 shadow-sm cursor-pointer flex items-center justify-center gap-2.5"
+        >
+          <svg className="h-4 w-4" viewBox="0 0 23 23" aria-hidden="true">
+            <rect x="1" y="1" width="10" height="10" fill="#F25022" />
+            <rect x="12" y="1" width="10" height="10" fill="#7FBA00" />
+            <rect x="1" y="12" width="10" height="10" fill="#00A4EF" />
+            <rect x="12" y="12" width="10" height="10" fill="#FFB900" />
+          </svg>
+          Sign in with Microsoft
+        </button>
+        <p className="mt-2 text-center text-xs text-slate-400">Employees only</p>
 
         {message && (
           <div className={`mt-4 p-3 rounded text-sm border ${

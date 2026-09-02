@@ -6,11 +6,6 @@ const SEARCH_RESULT_LIMIT = 10
 
 const toLang = (row) => ({ id: row.LANG_ID, name: row.NAME })
 
-const isTurkish = (name) => {
-  const normalized = (name || '').trim().toLocaleLowerCase('tr-TR')
-  return normalized === 'türkçe' || normalized === 'turkish'
-}
-
 // i/İ/ı/I ve diğer Türkçe karakterleri katlayarak "ital" ile "İtalyanca"
 // eşleşmesini sağlar. PostgreSQL ILIKE bu harfleri aynı saymaz.
 const foldTurkish = (text) =>
@@ -30,7 +25,7 @@ const SpinnerIcon = ({ className = 'h-4 w-4 text-blue-600' }) => (
   </svg>
 )
 
-// Dil seçim modalı: arama LANG.NAME üzerinden yapılır, Türkçe elenir.
+// Dil seçim modalı: arama LANG.NAME üzerinden yapılır.
 // Kaydet veritabanına yazmaz; seçimi profil taslağına aktarır.
 export default function LanguagesModal({ open, onClose, selected, onSaved }) {
   if (!open) return null
@@ -71,7 +66,7 @@ function LanguagesModalContent({ onClose, selected, onSaved }) {
       .then(({ data, error }) => {
         if (cancelled) return
         if (error) throw error
-        setCatalog((data || []).map(toLang).filter((lang) => !isTurkish(lang.name)))
+        setCatalog((data || []).map(toLang))
       })
       .catch((error) => {
         if (cancelled) return
@@ -131,7 +126,6 @@ function LanguagesModalContent({ onClose, selected, onSaved }) {
   }, [])
 
   const addLang = (lang) => {
-    if (isTurkish(lang.name)) return
     setDraft((prev) => (prev.some((item) => item.id === lang.id) ? prev : [...prev, lang]))
     setQuery('')
     setResults([])
@@ -189,7 +183,7 @@ function LanguagesModalContent({ onClose, selected, onSaved }) {
 
       <div className="relative bg-white w-full max-w-lg rounded-xl shadow-2xl flex flex-col max-h-[90vh]">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-          <h2 id="languages-modal-title" className="text-lg font-semibold text-slate-800">Yabancı Dillerim</h2>
+          <h2 id="languages-modal-title" className="text-lg font-semibold text-slate-800">Bilinen Dillerim</h2>
           <button
             type="button"
             onClick={onClose}
