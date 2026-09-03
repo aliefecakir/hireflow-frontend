@@ -6,6 +6,9 @@ import SkillsModal from './SkillsModal'
 import LanguagesModal from './LanguagesModal'
 import { PROFILE_PHOTO_CHANGED_EVENT } from './CandidateLayout'
 import departmentCatalog from './resources/departments.json'
+import { fetchLanguages, fetchMyProfile, updateMyProfile } from './api/profile'
+import { getErrorMessage } from './api/client'
+import { showToast } from './toast/ToastProvider'
 
 const notifyHeaderPhotoChange = (nextUrl) => {
   window.dispatchEvent(new CustomEvent(PROFILE_PHOTO_CHANGED_EVENT, {
@@ -66,13 +69,6 @@ function formatExperienceInterval(sdate, edate, stillWorking) {
   return toDisplayMonthYear(sdate) || '—'
 }
 
-const getAuthUserId = async () => {
-  const { data: { user }, error } = await supabase.auth.getUser()
-  if (error || !user) throw new Error('Oturum bilgisi alınamadı, lütfen tekrar giriş yapın.')
-  return user.id
-}
-
-// Dil Ekle'nin solundaki hızlı ekleme dilleri LANG.NAME ile eşleştirilir.
 const POPULAR_LANG_NAMES = [
   'Türkçe',
   'İngilizce',
@@ -81,7 +77,34 @@ const POPULAR_LANG_NAMES = [
   'İspanyolca',
 ]
 
-const toLang = (row) => ({ id: row.LANG_ID, name: row.NAME })
+const toLang = (row) => ({ id: row.langId || row.LANG_ID, name: row.name || row.NAME })
+
+const toUiExperience = (experience) => ({
+  EXPERIENCE_ID: experience.experienceId,
+  CORP_NAME: experience.corpName || '',
+  POSITION: experience.position || '',
+  DESCR: experience.descr || '',
+  STLL_WRKG: experience.stllWrkg ?? 0,
+  SDATE: experience.sdate || '',
+  EDATE: experience.edate || '',
+})
+
+const toUiSkill = (skill) => ({
+  id: skill.skillId || skill.id,
+  name: skill.name,
+})
+
+const isTempExperienceId = (id) => !id || String(id).startsWith('temp-')
+
+const toApiExperience = (experience) => ({
+  experienceId: isTempExperienceId(experience.EXPERIENCE_ID) ? null : experience.EXPERIENCE_ID,
+  corpName: experience.CORP_NAME,
+  position: experience.POSITION,
+  descr: experience.DESCR || null,
+  stllWrkg: Number(experience.STLL_WRKG) === 1 ? 1 : 0,
+  sdate: experience.SDATE || null,
+  edate: Number(experience.STLL_WRKG) === 1 ? null : (experience.EDATE || null),
+})
 
 const DEPARTMENT_OPTIONS = (departmentCatalog || [])
   .map((row) => (row?.DEPARTMENT || '').trim())
@@ -480,31 +503,6 @@ function UploadButton({ htmlFor, loading, children }) {
   )
 }
 
-// Yükleme sonucu mesajı: hata veya başarı bilgisini gösterir
-function UploadStatus({ error, successText }) {
-  if (error) {
-    return (
-      <p className="mt-2 flex items-start gap-1.5 text-xs text-red-600">
-        <svg className="h-4 w-4 flex-shrink-0 mt-px" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-        </svg>
-        <span>{error}</span>
-      </p>
-    )
-  }
-  if (successText) {
-    return (
-      <p className="mt-2 flex items-center gap-1.5 text-xs text-emerald-600">
-        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-        </svg>
-        <span>{successText}</span>
-      </p>
-    )
-  }
-  return null
-}
-
 // Yüklü dosyayı siler; yanlışlıkla basılmaması için önce onay ister
 function DeleteButton({ disabled, onClick, confirmText }) {
   return (
@@ -530,7 +528,6 @@ function ExperienceModal({
   form,
   errors,
   saving,
-  formError,
   onChange,
   onToggleStillWorking,
   onClose,
@@ -568,12 +565,6 @@ function ExperienceModal({
         </div>
 
         <form onSubmit={onSubmit} className="flex-1 overflow-y-auto p-5 space-y-4" noValidate>
-          {formError && (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {formError}
-            </div>
-          )}
-
           <div>
             <label htmlFor="exp-corp" className="block text-sm font-medium text-slate-700 mb-1.5">
               Kurum / Şirket <span className="text-red-500">*</span>
@@ -709,13 +700,10 @@ export default function CandidateProfile() {
   const [expForm, setExpForm] = useState(emptyExperienceForm)
   const [expErrors, setExpErrors] = useState({})
   const [expSaving, setExpSaving] = useState(false)
-  const [expFormError, setExpFormError] = useState('')
   const [editingExperienceId, setEditingExperienceId] = useState(null)
   const [errors, setErrors] = useState({})
-  const [formError, setFormError] = useState('')
   const [isLoadingData, setIsLoadingData] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
-  const [saveSuccess, setSaveSuccess] = useState(false)
   const [isCmpltd, setIsCmpltd] = useState(0) // PROFILE.IS_CMPLTD
   const [skills, setSkills] = useState([])
   const [languages, setLanguages] = useState([])
@@ -738,13 +726,8 @@ export default function CandidateProfile() {
 
   const fetchPopularLanguages = async () => {
     try {
-      const { data, error } = await supabase
-        .from('LANG')
-        .select('LANG_ID, NAME')
-        .in('NAME', POPULAR_LANG_NAMES)
-
-      if (error) throw error
-      const byName = new Map((data || []).map((row) => [row.NAME, toLang(row)]))
+      const data = await fetchLanguages()
+      const byName = new Map((data || []).map((row) => [row.name, toLang(row)]))
       setPopularLanguages(
         POPULAR_LANG_NAMES.map((name) => byName.get(name)).filter(Boolean)
       )
@@ -754,126 +737,67 @@ export default function CandidateProfile() {
     }
   }
 
-  // PRFL_ID ile ilişki tablosundan ID'leri alır, detay tablosundan kayıtları çeker
-  const fetchLinkedRecords = async (
-    currentProfileId,
-    relTable,
-    relIdColumn,
-    detailTable,
-    detailIdColumn,
-    detailSelect,
-    mapRow
-  ) => {
-    const { data: relations, error: relError } = await supabase
-      .from(relTable)
-      .select(relIdColumn)
-      .eq('PRFL_ID', currentProfileId)
-    if (relError) throw relError
-
-    if (!relations || relations.length === 0) return []
-
-    const ids = relations.map((rel) => rel[relIdColumn]).filter(Boolean)
-    if (ids.length === 0) return []
-
-    const { data: rows, error: detailError } = await supabase
-      .from(detailTable)
-      .select(detailSelect)
-      .in(detailIdColumn, ids)
-    if (detailError) throw detailError
-
-    return (rows || []).map(mapRow)
+  const applyProfileDetail = (detail) => {
+    if (!detail) return
+    const matchedDept = DEPARTMENT_OPTIONS.find(
+      (name) => normalizeSearch(name) === normalizeSearch(detail.dept)
+    )
+    setProfileId(detail.profileId || null)
+    setForm({
+      dept: matchedDept || detail.dept || '',
+      education: detail.education || '',
+    })
+    setPhotoUrl(detail.prflPhtUrl || '')
+    setCvUrl(detail.cvUrl || '')
+    setPhone(detail.phone || '')
+    setPhotoRevision(Date.now())
+    setIsCmpltd(detail.isCmpltd || 0)
+    setSelectedEducation(detail.education || '')
+    setSelectedDept(matchedDept || '')
+    setExperiences((detail.experiences || []).map(toUiExperience))
+    setSkills((detail.skills || []).map(toUiSkill))
+    setLanguages((detail.languages || []).map(toLang))
   }
 
-  // Mount: USER_ID -> PROFILE_ID, ardından PRFL_ID ile ilişkili kayıtlar
+  const persistProfile = async (overrides = {}) => {
+    const nextExperiences = overrides.experiences ?? experiences
+    const nextSkills = overrides.skills ?? skills
+    const nextLanguages = overrides.languages ?? languages
+    const nextDept = overrides.dept ?? form.dept
+    const nextEducation = overrides.education ?? form.education
+    const nextPhone = overrides.phone === undefined ? phone : overrides.phone
+    const nextPhoto = overrides.prflPhtUrl === undefined ? photoUrl : overrides.prflPhtUrl
+    const nextCv = overrides.cvUrl === undefined ? cvUrl : overrides.cvUrl
+
+    const saved = await updateMyProfile({
+      phone: nextPhone || null,
+      dept: (nextDept || '').trim() || null,
+      education: (nextEducation || '').trim() || null,
+      prflPhtUrl: nextPhoto || null,
+      cvUrl: nextCv || null,
+      experiences: nextExperiences.map(toApiExperience),
+      skillIds: nextSkills.map((skill) => skill.id),
+      langIds: nextLanguages.map((lang) => lang.id),
+    })
+    applyProfileDetail(saved)
+    return saved
+  }
+
   useEffect(() => {
     let cancelled = false
 
     const loadProfileData = async () => {
       setIsLoadingData(true)
-      setFormError('')
 
       try {
-        const authUserId = await getAuthUserId()
-
-        const { data: profile, error: profileError } = await supabase
-          .from('PROFILE')
-          .select('PROFILE_ID, DEPT, EDUCATION, PHONE, PRFL_PHT_URL, CV_URL, IS_CMPLTD')
-          .eq('USER_ID', authUserId)
-          .maybeSingle()
-        if (profileError) throw profileError
-
+        const detail = await fetchMyProfile()
         if (cancelled) return
-
+        applyProfileDetail(detail)
         await fetchPopularLanguages()
-
-        if (!profile) {
-          setProfileId(null)
-          setForm(initialForm)
-          setPhotoUrl('')
-          setCvUrl('')
-          setPhone('')
-          setIsCmpltd(0)
-          setSelectedEducation('')
-          setSelectedDept('')
-          setExperiences([])
-          setSkills([])
-          setLanguages([])
-          return
-        }
-
-        const currentProfileId = profile.PROFILE_ID
-        setProfileId(currentProfileId)
-        const matchedDept = DEPARTMENT_OPTIONS.find(
-          (name) => normalizeSearch(name) === normalizeSearch(profile.DEPT)
-        )
-        setForm({
-          dept: matchedDept || profile.DEPT || '',
-          education: profile.EDUCATION || '',
-        })
-        setPhotoUrl(profile.PRFL_PHT_URL || '')
-        setCvUrl(profile.CV_URL || '')
-        setPhone(profile.PHONE || '')
-        setPhotoRevision(Date.now())
-        setIsCmpltd(profile.IS_CMPLTD || 0)
-        setSelectedEducation(profile.EDUCATION || '')
-        setSelectedDept(matchedDept || '')
-
-        const { data: experienceRows, error: experienceError } = await supabase
-          .from('EXPERIENCE')
-          .select('EXPERIENCE_ID, CORP_NAME, POSITION, DESCR, STLL_WRKG, SDATE, EDATE, CDATE')
-          .eq('PROFILE_ID', currentProfileId)
-          .order('CDATE', { ascending: false })
-        if (experienceError) throw experienceError
-        if (cancelled) return
-        setExperiences(experienceRows || [])
-
-        const loadedSkills = await fetchLinkedRecords(
-          currentProfileId,
-          'PRFL_SKILL_REL',
-          'SKILL_ID',
-          'SKILL',
-          'SKILL_ID',
-          'SKILL_ID, NAME',
-          (row) => ({ id: row.SKILL_ID, name: row.NAME })
-        )
-        if (cancelled) return
-        setSkills(loadedSkills)
-
-        const loadedLanguages = await fetchLinkedRecords(
-          currentProfileId,
-          'PRFL_LANG_REL',
-          'LANG_ID',
-          'LANG',
-          'LANG_ID',
-          'LANG_ID, NAME',
-          toLang
-        )
-        if (cancelled) return
-        setLanguages(loadedLanguages)
       } catch (error) {
         if (cancelled) return
         console.error('Error loading profile data:', error)
-        setFormError('Profil bilgileri yüklenirken bir hata oluştu. Lütfen sayfayı yenileyin.')
+        showToast.error('Hata Oluştu', getErrorMessage(error) || 'Profil bilgileri yüklenirken bir hata oluştu. Lütfen sayfayı yenileyin.')
       } finally {
         if (!cancelled) setIsLoadingData(false)
       }
@@ -915,7 +839,6 @@ export default function CandidateProfile() {
       setExpForm(emptyExperienceForm)
     }
     setExpErrors({})
-    setExpFormError('')
     setExpModalOpen(true)
   }
 
@@ -925,53 +848,6 @@ export default function CandidateProfile() {
     setEditingExperienceId(null)
     setExpForm(emptyExperienceForm)
     setExpErrors({})
-    setExpFormError('')
-  }
-
-  const fetchExperiences = async (currentProfileId) => {
-    const { data, error } = await supabase
-      .from('EXPERIENCE')
-      .select('EXPERIENCE_ID, CORP_NAME, POSITION, DESCR, STLL_WRKG, SDATE, EDATE, CDATE')
-      .eq('PROFILE_ID', currentProfileId)
-      .order('CDATE', { ascending: false })
-    if (error) throw error
-    setExperiences(data || [])
-    return data || []
-  }
-
-  const ensureProfileId = async () => {
-    if (profileId) return profileId
-
-    const authUserId = await getAuthUserId()
-    const { data: existing, error: existingError } = await supabase
-      .from('PROFILE')
-      .select('PROFILE_ID')
-      .eq('USER_ID', authUserId)
-      .maybeSingle()
-    if (existingError) throw existingError
-    if (existing?.PROFILE_ID) {
-      setProfileId(existing.PROFILE_ID)
-      return existing.PROFILE_ID
-    }
-
-    const { data: created, error: createError } = await supabase
-      .from('PROFILE')
-      .insert({
-        USER_ID: authUserId,
-        DEPT: form.dept.trim() || null,
-        EDUCATION: form.education.trim() || null,
-        PHONE: phone || null,
-        PRFL_PHT_URL: photoUrl || null,
-        CV_URL: cvUrl || null,
-        IS_CMPLTD: 0,
-        CUSER: authUserId,
-      })
-      .select('PROFILE_ID')
-      .maybeSingle()
-    if (createError) throw createError
-    if (!created?.PROFILE_ID) throw new Error('Profil kaydı oluşturulamadı.')
-    setProfileId(created.PROFILE_ID)
-    return created.PROFILE_ID
   }
 
   const validateExperienceForm = () => {
@@ -992,44 +868,25 @@ export default function CandidateProfile() {
 
   const handleAddExperience = async (event) => {
     event.preventDefault()
-    setExpFormError('')
     if (!validateExperienceForm()) return
 
     try {
       setExpSaving(true)
-      const authUserId = await getAuthUserId()
-      const currentProfileId = await ensureProfileId()
-
-      const payload = {
-        PROFILE_ID: currentProfileId,
+      const nextExperience = {
+        EXPERIENCE_ID: editingExperienceId || `temp-${Date.now()}`,
         CORP_NAME: expForm.corpName.trim(),
         POSITION: expForm.position.trim(),
-        DESCR: expForm.descr.trim() || null,
+        DESCR: expForm.descr.trim() || '',
         STLL_WRKG: expForm.stllWrkg ? 1 : 0,
         SDATE: toStoredMonthYear(expForm.sdate),
-        EDATE: expForm.stllWrkg ? null : toStoredMonthYear(expForm.edate),
-        CUSER: authUserId,
+        EDATE: expForm.stllWrkg ? '' : toStoredMonthYear(expForm.edate),
       }
 
-      if (editingExperienceId) {
-        const { error } = await supabase
-          .from('EXPERIENCE')
-          .update({
-            CORP_NAME: payload.CORP_NAME,
-            POSITION: payload.POSITION,
-            DESCR: payload.DESCR,
-            STLL_WRKG: payload.STLL_WRKG,
-            SDATE: payload.SDATE,
-            EDATE: payload.EDATE,
-          })
-          .eq('EXPERIENCE_ID', editingExperienceId)
-        if (error) throw error
-      } else {
-        const { error } = await supabase.from('EXPERIENCE').insert(payload)
-        if (error) throw error
-      }
+      const nextExperiences = editingExperienceId
+        ? experiences.map((item) => (item.EXPERIENCE_ID === editingExperienceId ? nextExperience : item))
+        : [nextExperience, ...experiences]
 
-      await fetchExperiences(currentProfileId)
+      await persistProfile({ experiences: nextExperiences })
       if (errors.experienceId) setErrors((prev) => ({ ...prev, experienceId: '' }))
       setExpModalOpen(false)
       setEditingExperienceId(null)
@@ -1037,12 +894,13 @@ export default function CandidateProfile() {
       setExpErrors({})
     } catch (error) {
       console.error('Error adding experience:', error)
-      const errorText = `${error?.message || ''} ${error?.details || ''}`.toLowerCase()
-      const isDuplicatePhone = error?.code === '23505' && errorText.includes('phone')
-      setExpFormError(
+      const errorText = `${error?.message || ''}`.toLowerCase()
+      const isDuplicatePhone = errorText.includes('phone') || errorText.includes('numara')
+      showToast.error(
+        'Hata Oluştu',
         isDuplicatePhone
           ? 'Bu numara zaten kayıtlı. Deneyim eklemek için önce profil telefonunu değiştirin.'
-          : (error.message || 'Deneyim eklenirken bir hata oluştu.')
+          : (getErrorMessage(error) || 'Deneyim eklenirken bir hata oluştu.')
       )
     } finally {
       setExpSaving(false)
@@ -1053,15 +911,11 @@ export default function CandidateProfile() {
     if (!window.confirm('Bu deneyimi silmek istediğinizden emin misiniz?')) return
 
     try {
-      const { error } = await supabase
-        .from('EXPERIENCE')
-        .delete()
-        .eq('EXPERIENCE_ID', experienceId)
-      if (error) throw error
-      setExperiences((prev) => prev.filter((item) => item.EXPERIENCE_ID !== experienceId))
+      const nextExperiences = experiences.filter((item) => item.EXPERIENCE_ID !== experienceId)
+      await persistProfile({ experiences: nextExperiences })
     } catch (error) {
       console.error('Error deleting experience:', error)
-      setFormError(error.message || 'Deneyim silinirken bir hata oluştu.')
+      showToast.error('Hata Oluştu', getErrorMessage(error) || 'Deneyim silinirken bir hata oluştu.')
     }
   }
 
@@ -1117,7 +971,7 @@ export default function CandidateProfile() {
     const isAllowedSize = file.size <= MAX_FILE_SIZE
 
     if (!isAllowedType || !isAllowedSize) {
-      setUploadState(target, { error: invalidMessage })
+      showToast.warning('Dikkat', invalidMessage)
       return
     }
 
@@ -1130,7 +984,7 @@ export default function CandidateProfile() {
       } = await supabase.auth.getUser()
       if (authError || !user) throw new Error('Oturum bilgisi alınamadı, lütfen tekrar giriş yapın.')
 
-      const { column, label, folder, legacyPath } = UPLOAD_TARGETS[target]
+      const { label, folder, legacyPath } = UPLOAD_TARGETS[target]
       const previousUrl = target === 'photo' ? photoUrl : cvUrl
       const filePath = buildUniqueFilePath(folder, user.id, file)
 
@@ -1147,11 +1001,11 @@ export default function CandidateProfile() {
         data: { publicUrl },
       } = supabase.storage.from('candidate-files').getPublicUrl(filePath)
 
-      const { error: updateError } = await supabase
-        .from('PROFILE')
-        .update({ [column]: publicUrl })
-        .eq('USER_ID', user.id)
-      if (updateError) throw updateError
+      if (target === 'photo') {
+        await persistProfile({ prflPhtUrl: publicUrl })
+      } else {
+        await persistProfile({ cvUrl: publicUrl })
+      }
 
       const stalePaths = [storagePathFromPublicUrl(previousUrl), legacyPath(user.id)]
         .filter((path) => path && path !== filePath)
@@ -1166,12 +1020,10 @@ export default function CandidateProfile() {
       } else {
         setCvUrl(publicUrl)
       }
-      setUploadState(target, { successText: `${label} güncellendi.` })
+      showToast.success('Başarılı', `${label} güncellendi.`)
     } catch (error) {
       console.error(`Error uploading ${target}:`, error)
-      setUploadState(target, {
-        error: 'Dosya yüklenirken bir hata oluştu. Lütfen tekrar deneyin.',
-      })
+      showToast.error('Hata Oluştu', 'Dosya yüklenirken bir hata oluştu. Lütfen tekrar deneyin.')
     } finally {
       setUploadState(target, { loading: false })
     }
@@ -1188,7 +1040,7 @@ export default function CandidateProfile() {
       } = await supabase.auth.getUser()
       if (authError || !user) throw new Error('Oturum bilgisi alınamadı, lütfen tekrar giriş yapın.')
 
-      const { column, label, legacyPath } = UPLOAD_TARGETS[target]
+      const { label, legacyPath } = UPLOAD_TARGETS[target]
       const currentUrl = target === 'photo' ? photoUrl : cvUrl
       const pathsToRemove = [storagePathFromPublicUrl(currentUrl), legacyPath(user.id)]
         .filter(Boolean)
@@ -1200,11 +1052,11 @@ export default function CandidateProfile() {
         if (removeError) throw removeError
       }
 
-      const { error: updateError } = await supabase
-        .from('PROFILE')
-        .update({ [column]: null })
-        .eq('USER_ID', user.id)
-      if (updateError) throw updateError
+      if (target === 'photo') {
+        await persistProfile({ prflPhtUrl: '' })
+      } else {
+        await persistProfile({ cvUrl: '' })
+      }
 
       if (target === 'photo') {
         setPhotoUrl('')
@@ -1212,12 +1064,10 @@ export default function CandidateProfile() {
       } else {
         setCvUrl('')
       }
-      setUploadState(target, { successText: `${label} silindi.` })
+      showToast.success('Başarılı', `${label} silindi.`)
     } catch (error) {
       console.error(`Error deleting ${target}:`, error)
-      setUploadState(target, {
-        error: 'Dosya silinirken bir hata oluştu. Lütfen tekrar deneyin.',
-      })
+      showToast.error('Hata Oluştu', 'Dosya silinirken bir hata oluştu. Lütfen tekrar deneyin.')
     } finally {
       setUploadState(target, { loading: false })
     }
@@ -1268,130 +1118,31 @@ export default function CandidateProfile() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    setSaveSuccess(false)
-    setFormError('')
-    if (!validateForm()) return
+    if (!validateForm()) {
+      showToast.warning('Eksik Bilgi', 'Lütfen zorunlu alanları doldurun')
+      return
+    }
     await handleSave()
   }
 
   // Kaydet: PROFILE güncellenir; ilişkiler PRFL_ID ile silinip yeniden yazılır
   const handleSave = async () => {
     setIsSaving(true)
-    setSaveSuccess(false)
-    setFormError('')
 
     try {
-      const authUserId = await getAuthUserId()
-
-      const is100Percent = Boolean(
-        form.dept.trim() &&
-        form.dept === selectedDept &&
-        form.education.trim() &&
-        form.education === selectedEducation &&
-        hasValidPhone &&
-        photoUrl &&
-        cvUrl &&
-        experiences.length > 0 &&
-        skills.length > 0 &&
-        languages.length > 0
-      )
-      const isCmpltdValue = is100Percent ? 1 : 0
-
-      const { data: profileRow, error: profileIdError } = await supabase
-        .from('PROFILE')
-        .select('PROFILE_ID')
-        .eq('USER_ID', authUserId)
-        .maybeSingle()
-      if (profileIdError) throw profileIdError
-
-      let currentProfileId = profileRow?.PROFILE_ID || null
-
-      if (!currentProfileId) {
-        const { data: createdProfile, error: createProfileError } = await supabase
-          .from('PROFILE')
-          .insert({
-            USER_ID: authUserId,
-            DEPT: form.dept.trim(),
-            EDUCATION: form.education.trim(),
-            PHONE: phone || null,
-            PRFL_PHT_URL: photoUrl || null,
-            CV_URL: cvUrl || null,
-            IS_CMPLTD: isCmpltdValue,
-            CUSER: authUserId,
-          })
-          .select('PROFILE_ID')
-          .maybeSingle()
-        if (createProfileError) throw createProfileError
-        currentProfileId = createdProfile?.PROFILE_ID
-        if (!currentProfileId) throw new Error('Profil kaydı oluşturulamadı.')
-      } else {
-        const { error: profileError } = await supabase
-          .from('PROFILE')
-          .update({
-            DEPT: form.dept.trim(),
-            EDUCATION: form.education.trim(),
-            PHONE: phone || null,
-            PRFL_PHT_URL: photoUrl || null,
-            CV_URL: cvUrl || null,
-            IS_CMPLTD: isCmpltdValue,
-          })
-          .eq('USER_ID', authUserId)
-        if (profileError) throw profileError
-      }
-
-      setProfileId(currentProfileId)
-
-      const { error: deleteSkillRelError } = await supabase
-        .from('PRFL_SKILL_REL')
-        .delete()
-        .eq('PRFL_ID', currentProfileId)
-      if (deleteSkillRelError) throw deleteSkillRelError
-
-      const { error: deleteLangRelError } = await supabase
-        .from('PRFL_LANG_REL')
-        .delete()
-        .eq('PRFL_ID', currentProfileId)
-      if (deleteLangRelError) throw deleteLangRelError
-
-      if (skills.length > 0) {
-        const { error: insertSkillRelError } = await supabase
-          .from('PRFL_SKILL_REL')
-          .insert(
-            skills.map((skill) => ({
-              PRFL_ID: currentProfileId,
-              SKILL_ID: skill.id,
-              CUSER: authUserId,
-            }))
-          )
-        if (insertSkillRelError) throw insertSkillRelError
-      }
-
-      if (languages.length > 0) {
-        const { error: insertLangRelError } = await supabase
-          .from('PRFL_LANG_REL')
-          .insert(
-            languages.map((lang) => ({
-              PRFL_ID: currentProfileId,
-              LANG_ID: lang.id,
-              CUSER: authUserId,
-            }))
-          )
-        if (insertLangRelError) throw insertLangRelError
-      }
-
-      setIsCmpltd(isCmpltdValue)
-      setSaveSuccess(true)
-      setTimeout(() => setSaveSuccess(false), 4000)
+      const saved = await persistProfile()
+      setIsCmpltd(saved.isCmpltd || 0)
+      showToast.success('Başarılı', 'Profiliniz başarıyla kaydedildi.')
     } catch (error) {
       console.error('Error saving profile:', error)
-      const errorText = `${error?.message || ''} ${error?.details || ''}`.toLowerCase()
-      const isDuplicatePhone = error?.code === '23505' && errorText.includes('phone')
+      const errorText = `${error?.message || ''}`.toLowerCase()
+      const isDuplicatePhone = errorText.includes('phone') || errorText.includes('numara')
 
       if (isDuplicatePhone) {
         setErrors((prev) => ({ ...prev, phone: 'Bu numara zaten kayıtlı' }))
-        setFormError('Bu numara zaten kayıtlı')
+        showToast.error('Hata Oluştu', 'Bu numara zaten kayıtlı')
       } else {
-        setFormError(error.message || 'Profil kaydedilirken bir hata oluştu. Lütfen tekrar deneyin.')
+        showToast.error('Hata Oluştu', getErrorMessage(error) || 'Profil kaydedilirken bir hata oluştu. Lütfen tekrar deneyin.')
       }
     } finally {
       setIsSaving(false)
@@ -1496,10 +1247,6 @@ export default function CandidateProfile() {
                   />
                 )}
               </div>
-              <UploadStatus
-                error={uploads.photo.error}
-                successText={uploads.photo.successText}
-              />
             </div>
           </div>
 
@@ -1542,10 +1289,6 @@ export default function CandidateProfile() {
                   />
                 )}
               </div>
-              <UploadStatus
-                error={uploads.cv.error}
-                successText={uploads.cv.successText}
-              />
             </div>
           </div>
         </div>
@@ -1553,15 +1296,6 @@ export default function CandidateProfile() {
 
       {/* Form Card */}
       <form onSubmit={handleSubmit} noValidate className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-8">
-        {formError && (
-          <div className="flex items-center space-x-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-            <span>{formError}</span>
-          </div>
-        )}
-
         {/* Department & Education */}
         <fieldset className="space-y-5">
           <legend className="text-base font-semibold text-slate-800 mb-3">Departman & Eğitim</legend>
@@ -1807,14 +1541,6 @@ export default function CandidateProfile() {
 
         {/* Actions */}
         <div className="flex items-center justify-end gap-3 pt-5 border-t border-gray-200">
-          {saveSuccess && (
-            <p className="flex items-center gap-1.5 text-sm font-medium text-emerald-700">
-              <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span>Profiliniz başarıyla kaydedildi.</span>
-            </p>
-          )}
           <button
             type="button"
             onClick={() => {
@@ -1855,7 +1581,6 @@ export default function CandidateProfile() {
         form={expForm}
         errors={expErrors}
         saving={expSaving}
-        formError={expFormError}
         onChange={handleExperienceFormChange}
         onToggleStillWorking={handleToggleStillWorking}
         onClose={closeExperienceModal}

@@ -1,10 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { supabase } from './supabaseClient'
+import { fetchLanguages } from './api/profile'
 
 const SEARCH_MIN_LENGTH = 2
 const SEARCH_RESULT_LIMIT = 10
-
-const toLang = (row) => ({ id: row.LANG_ID, name: row.NAME })
 
 // i/İ/ı/I ve diğer Türkçe karakterleri katlayarak "ital" ile "İtalyanca"
 // eşleşmesini sağlar. PostgreSQL ILIKE bu harfleri aynı saymaz.
@@ -59,14 +57,10 @@ function LanguagesModalContent({ onClose, selected, onSaved }) {
   useEffect(() => {
     let cancelled = false
 
-    supabase
-      .from('LANG')
-      .select('LANG_ID, NAME')
-      .order('NAME')
-      .then(({ data, error }) => {
+    fetchLanguages()
+      .then((data) => {
         if (cancelled) return
-        if (error) throw error
-        setCatalog((data || []).map(toLang))
+        setCatalog((data || []).map((row) => ({ id: row.langId, name: row.name })))
       })
       .catch((error) => {
         if (cancelled) return

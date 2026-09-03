@@ -1,14 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { supabase } from './supabaseClient'
+import { fetchSkills } from './api/profile'
 
 // Arama eşiği ve liste boyutları
 const SEARCH_MIN_LENGTH = 2
 const SEARCH_DEBOUNCE_MS = 350
 const SEARCH_RESULT_LIMIT = 10
-
-// Popüler yetenekler: sabit liste, sıralama bu dizideki gibidir. İsimler
-// SKILL tablosundaki aktif kayıtlarla eşleştirilir; tabloda olmayanlar
-// gösterilmez
 const POPULAR_SKILL_NAMES = [
   'Java',
   'Python',
@@ -28,8 +24,6 @@ const POPULAR_SKILL_NAMES = [
 ]
 
 // SKILL satırını bileşen içinde kullanılan şekle çevirir
-const toSkill = (row) => ({ id: row.SKILL_ID, name: row.NAME })
-
 const SpinnerIcon = ({ className = 'h-4 w-4 text-blue-600' }) => (
   <svg className={`animate-spin ${className}`} fill="none" viewBox="0 0 24 24">
     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -80,17 +74,10 @@ function SkillsModalContent({ onClose, selected, onSaved }) {
   useEffect(() => {
     let cancelled = false
 
-    supabase
-      .from('SKILL')
-      .select('SKILL_ID, NAME')
-      .eq('IS_ACTV', 1)
-      .in('NAME', POPULAR_SKILL_NAMES)
-      .then(({ data, error }) => {
+    fetchSkills({ limit: 500 })
+      .then((data) => {
         if (cancelled) return
-        if (error) throw error
-        // Sonuçları sabit listenin sırasına göre diz; tabloda olmayan
-        // isimler elenir
-        const byName = new Map((data || []).map((row) => [row.NAME, toSkill(row)]))
+        const byName = new Map((data || []).map((row) => [row.name, { id: row.skillId, name: row.name }]))
         setSuggestions(
           POPULAR_SKILL_NAMES.map((name) => byName.get(name)).filter(Boolean)
         )
@@ -122,17 +109,8 @@ function SkillsModalContent({ onClose, selected, onSaved }) {
       try {
         setSearching(true)
         setSearchFailed(false)
-        const { data, error } = await supabase
-          .from('SKILL')
-          .select('SKILL_ID, NAME')
-          .eq('IS_ACTV', 1)
-          .ilike('NAME', `%${trimmed}%`)
-          .order('NAME')
-          .limit(SEARCH_RESULT_LIMIT)
-          .abortSignal(controller.signal)
-
-        if (error) throw error
-        setResults((data || []).map(toSkill))
+        const data = await fetchSkills({ q: trimmed, limit: SEARCH_RESULT_LIMIT })
+        setResults((data || []).map((row) => ({ id: row.skillId, name: row.name })))
         setHighlightedIndex(0)
         setDropdownOpen(true)
       } catch (error) {

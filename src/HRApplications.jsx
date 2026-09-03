@@ -1,38 +1,45 @@
 import { useState, useEffect } from 'react'
-import { supabase } from './supabaseClient'
+import { fetchManagedApplications, updateApplicationStatus } from './api/applications'
+import { fetchProfileByUserId } from './api/profile'
+import { getErrorMessage } from './api/client'
+import { showToast } from './toast/ToastProvider'
 
 const FILTER_OPTIONS = [
   { value: 'ALL', label: 'Tümü' },
-  { value: 'DISPATCHED', label: 'İşleme Alınmamış' },
-  { value: 'PROCESS', label: 'İşleme Alınmış' },
-  { value: 'APPRV', label: 'Onaylandı' },
-  { value: 'RJCTD', label: 'Reddedildi' },
+  { value: 'WAIT', label: 'Beklemede' },
+  { value: 'REVIEW', label: 'İncelemede' },
+  { value: 'APPR', label: 'Kabul' },
+  { value: 'REJ', label: 'Red' },
 ]
 
 const STATUS_ACTIONS = [
   {
-    shortCode: 'PROCESS',
-    label: 'İşlemde',
+    shortCode: 'REVIEW',
+    label: 'İncelemede',
     className: 'bg-indigo-600 hover:bg-indigo-700 text-white',
     disabledClassName: 'bg-indigo-100 text-indigo-700 cursor-default',
   },
   {
-    shortCode: 'APPRV',
-    label: 'Onayla',
+    shortCode: 'APPR',
+    label: 'Kabul',
     className: 'bg-emerald-600 hover:bg-emerald-700 text-white',
     disabledClassName: 'bg-emerald-100 text-emerald-700 cursor-default',
   },
   {
-    shortCode: 'RJCTD',
-    label: 'Reddet',
+    shortCode: 'REJ',
+    label: 'Red',
     className: 'bg-red-600 hover:bg-red-700 text-white',
     disabledClassName: 'bg-red-100 text-red-700 cursor-default',
   },
 ]
 
-function unwrapRelation(value) {
-  if (Array.isArray(value)) return value[0] || null
-  return value || null
+function normalizeStatusCode(shortCode) {
+  const code = (shortCode || '').toUpperCase()
+  if (code === 'DISPATCHED') return 'WAIT'
+  if (code === 'PROCESS') return 'REVIEW'
+  if (code === 'APPRV') return 'APPR'
+  if (code === 'RJCTD') return 'REJ'
+  return code
 }
 
 function formatDate(cdate) {
@@ -44,24 +51,24 @@ function formatDate(cdate) {
   })
 }
 
-function getFullName(user) {
-  if (!user) return 'İsimsiz aday'
-  return [user.NAME, user.SURNAME].filter(Boolean).join(' ').trim() || 'İsimsiz aday'
+function getFullName(application) {
+  if (!application) return 'İsimsiz aday'
+  return [application.candidateName, application.candidateSurname].filter(Boolean).join(' ').trim() || 'İsimsiz aday'
 }
 
-function getInitials(user) {
-  const name = user?.NAME?.charAt(0) || ''
-  const surname = user?.SURNAME?.charAt(0) || ''
+function getInitials(application) {
+  const name = application?.candidateName?.charAt(0) || ''
+  const surname = application?.candidateSurname?.charAt(0) || ''
   return `${name}${surname}`.toUpperCase() || '?'
 }
 
 function getStatusBadgeClass(shortCode) {
-  switch ((shortCode || '').toUpperCase()) {
-    case 'APPRV':
+  switch (normalizeStatusCode(shortCode)) {
+    case 'APPR':
       return 'bg-green-50 text-green-700 border-green-200'
-    case 'RJCTD':
+    case 'REJ':
       return 'bg-red-50 text-red-700 border-red-200'
-    case 'PROCESS':
+    case 'REVIEW':
       return 'bg-indigo-50 text-indigo-700 border-indigo-200'
     case 'WAIT':
       return 'bg-amber-50 text-amber-700 border-amber-200'
@@ -71,16 +78,15 @@ function getStatusBadgeClass(shortCode) {
 }
 
 function StatusBadge({ status }) {
-  const row = unwrapRelation(status)
-  if (!row?.NAME) {
+  if (!status?.name) {
     return <span className="text-sm text-slate-400">Durum yok</span>
   }
 
   return (
     <span
-      className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${getStatusBadgeClass(row.SHRT_CODE)}`}
+      className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${getStatusBadgeClass(status.shrtCode)}`}
     >
-      {row.NAME}
+      {status.name}
     </span>
   )
 }
@@ -91,11 +97,10 @@ function CandidateProfileModal({ selectedApp, onClose, onUpdateStatus, updatingS
   const [skills, setSkills] = useState([])
   const [languages, setLanguages] = useState([])
   const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState('')
 
-  const candidate = unwrapRelation(selectedApp?.USER)
-  const currentStatus = unwrapRelation(selectedApp?.GNL_ST)
-  const currentShortCode = (currentStatus?.SHRT_CODE || '').toUpperCase()
+  const candidateEmail = selectedApp?.candidateEmail
+  const currentStatus = selectedApp?.status
+  const currentShortCode = normalizeStatusCode(currentStatus?.shrtCode)
 
   useEffect(() => {
     const onKeyDown = (event) => {
@@ -106,71 +111,51 @@ function CandidateProfileModal({ selectedApp, onClose, onUpdateStatus, updatingS
   }, [onClose])
 
   useEffect(() => {
-    if (!selectedApp?.CNDT_ID) return undefined
+    if (!selectedApp?.cndtId) return undefined
 
     let cancelled = false
 
     const fetchCandidateProfile = async () => {
       try {
         setIsLoading(true)
-        setError('')
         setProfile(null)
         setExperiences([])
         setSkills([])
         setLanguages([])
 
-        const { data: profileRow, error: profileError } = await supabase
-          .from('PROFILE')
-          .select('PROFILE_ID, DEPT, EDUCATION, PHONE, PRFL_PHT_URL, CV_URL')
-          .eq('USER_ID', selectedApp.CNDT_ID)
-          .maybeSingle()
-
-        if (profileError) throw profileError
+        const detail = await fetchProfileByUserId(selectedApp.cndtId)
         if (cancelled) return
 
-        if (!profileRow?.PROFILE_ID) {
+        if (!detail?.profileId) {
           setProfile(null)
           return
         }
 
-        setProfile(profileRow)
-
-        const [experienceRes, skillRes, languageRes] = await Promise.all([
-          supabase
-            .from('EXPERIENCE')
-            .select('EXPERIENCE_ID, CORP_NAME, POSITION, DESCR, STLL_WRKG, SDATE, EDATE')
-            .eq('PROFILE_ID', profileRow.PROFILE_ID)
-            .order('CDATE', { ascending: false }),
-          supabase
-            .from('PRFL_SKILL_REL')
-            .select('SKILL_ID, SKILL:SKILL_ID (NAME)')
-            .eq('PRFL_ID', profileRow.PROFILE_ID),
-          supabase
-            .from('PRFL_LANG_REL')
-            .select('LANG_ID, LANG:LANG_ID (NAME)')
-            .eq('PRFL_ID', profileRow.PROFILE_ID),
-        ])
-
-        if (experienceRes.error) throw experienceRes.error
-        if (skillRes.error) throw skillRes.error
-        if (languageRes.error) throw languageRes.error
-        if (cancelled) return
-
-        setExperiences(experienceRes.data || [])
-        setSkills(
-          (skillRes.data || [])
-            .map((row) => unwrapRelation(row.SKILL))
-            .filter(Boolean)
+        setProfile({
+          PROFILE_ID: detail.profileId,
+          DEPT: detail.dept,
+          EDUCATION: detail.education,
+          PHONE: detail.phone,
+          PRFL_PHT_URL: detail.prflPhtUrl,
+          CV_URL: detail.cvUrl,
+        })
+        setExperiences(
+          (detail.experiences || []).map((experience) => ({
+            EXPERIENCE_ID: experience.experienceId,
+            CORP_NAME: experience.corpName,
+            POSITION: experience.position,
+            DESCR: experience.descr,
+            STLL_WRKG: experience.stllWrkg,
+            SDATE: experience.sdate,
+            EDATE: experience.edate,
+          }))
         )
-        setLanguages(
-          (languageRes.data || [])
-            .map((row) => unwrapRelation(row.LANG))
-            .filter(Boolean)
-        )
+        setSkills((detail.skills || []).map((skill) => ({ NAME: skill.name })))
+        setLanguages((detail.languages || []).map((lang) => ({ NAME: lang.name })))
       } catch (err) {
         if (cancelled) return
         console.error('Error fetching candidate profile:', err)
-        setError(err.message || 'Aday profili yüklenirken bir hata oluştu.')
+        showToast.error('Hata Oluştu', getErrorMessage(err) || 'Aday profili yüklenirken bir hata oluştu.')
       } finally {
         if (!cancelled) setIsLoading(false)
       }
@@ -180,7 +165,7 @@ function CandidateProfileModal({ selectedApp, onClose, onUpdateStatus, updatingS
     return () => {
       cancelled = true
     }
-  }, [selectedApp?.CNDT_ID])
+  }, [selectedApp?.cndtId])
 
   return (
     <div
@@ -202,19 +187,19 @@ function CandidateProfileModal({ selectedApp, onClose, onUpdateStatus, updatingS
                 />
               ) : (
                 <span className="text-white font-semibold text-lg">
-                  {isLoading ? '...' : getInitials(candidate)}
+                  {isLoading ? '...' : getInitials(selectedApp)}
                 </span>
               )}
             </div>
             <div className="min-w-0">
               <h2 className="text-xl font-bold text-slate-800 truncate">
-                {getFullName(candidate)}
+                {getFullName(selectedApp)}
               </h2>
-              {(candidate?.EMAIL || profile?.PHONE) && (
+              {(candidateEmail || profile?.PHONE) && (
                 <p className="text-sm text-slate-500 mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
-                  {candidate?.EMAIL && (
-                    <a href={`mailto:${candidate.EMAIL}`} className="truncate hover:text-blue-700">
-                      {candidate.EMAIL}
+                  {candidateEmail && (
+                    <a href={`mailto:${candidateEmail}`} className="truncate hover:text-blue-700">
+                      {candidateEmail}
                     </a>
                   )}
                   {profile?.PHONE && (
@@ -262,10 +247,6 @@ function CandidateProfileModal({ selectedApp, onClose, onUpdateStatus, updatingS
                 <div className="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-blue-700"></div>
                 <p className="mt-3 text-slate-600 font-medium">Profil yükleniyor...</p>
               </div>
-            </div>
-          ) : error ? (
-            <div className="rounded-lg px-4 py-3 text-sm font-medium bg-red-50 text-red-800 border border-red-200">
-              {error}
             </div>
           ) : !profile ? (
             <div className="text-center py-10">
@@ -370,7 +351,7 @@ function CandidateProfileModal({ selectedApp, onClose, onUpdateStatus, updatingS
                   key={action.shortCode}
                   type="button"
                   disabled={isCurrent || Boolean(updatingStatus)}
-                  onClick={() => onUpdateStatus(selectedApp.APP_ID, action.shortCode)}
+                  onClick={() => onUpdateStatus(selectedApp.appId, action.shortCode)}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-80 ${
                     isCurrent ? action.disabledClassName : action.className
                   }`}
@@ -386,41 +367,115 @@ function CandidateProfileModal({ selectedApp, onClose, onUpdateStatus, updatingS
   )
 }
 
+function JobDetailsModal({ selectedJob, onClose }) {
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
+
+  if (!selectedJob) return null
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-xl shadow-xl border border-gray-200 w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-4 p-6 border-b border-slate-200">
+          <div className="min-w-0 flex-1">
+            <h2 className="text-xl font-bold text-slate-800">
+              {selectedJob.postTitle || 'İlan Başlığı'}
+            </h2>
+            <p className="text-sm text-slate-500 mt-1">
+              İlan Detayları
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            aria-label="Kapat"
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          <section>
+            <h3 className="text-sm font-semibold text-slate-800 mb-3">Açıklama</h3>
+            {selectedJob.postDescr ? (
+              <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+                {selectedJob.postDescr}
+              </p>
+            ) : (
+              <p className="text-sm text-slate-500">Açıklama eklenmemiş.</p>
+            )}
+          </section>
+
+          {(selectedJob.postReqTech || selectedJob.postReqDept) && (
+            <section>
+              <h3 className="text-sm font-semibold text-slate-800 mb-3">Gereksinimler</h3>
+              <div className="space-y-3">
+                {selectedJob.postReqTech && (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-xs font-semibold text-slate-600 mb-1">Teknik Gereksinimler</p>
+                    <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+                      {selectedJob.postReqTech}
+                    </p>
+                  </div>
+                )}
+                {selectedJob.postReqDept && (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-xs font-semibold text-slate-600 mb-1">Departman</p>
+                    <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+                      {selectedJob.postReqDept}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+        </div>
+
+        <div className="border-t border-slate-200 p-4 bg-slate-50">
+          <p className="text-xs text-slate-500">
+            İlan ID: <span className="font-mono">{selectedJob.postId}</span>
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function HRApplications() {
   const [applications, setApplications] = useState([])
   const [activeFilter, setActiveFilter] = useState('ALL')
   const [isLoading, setIsLoading] = useState(true)
   const [selectedApp, setSelectedApp] = useState(null)
+  const [selectedJob, setSelectedJob] = useState(null)
   const [updatingStatus, setUpdatingStatus] = useState(null)
-  const [message, setMessage] = useState({ type: '', text: '' })
 
   useEffect(() => {
     fetchApplications()
   }, [])
 
-  useEffect(() => {
-    if (!message.text) return undefined
-    const timer = setTimeout(() => setMessage({ type: '', text: '' }), 4000)
-    return () => clearTimeout(timer)
-  }, [message])
-
   const fetchApplications = async () => {
     try {
       setIsLoading(true)
 
-      const { data, error } = await supabase
-        .from('APP')
-        .select('APP_ID, CDATE, CNDT_ID, POST:POST_ID(TITLE), USER:CNDT_ID(NAME, SURNAME, EMAIL), GNL_ST:ST_ID(NAME, SHRT_CODE)')
-        .order('CDATE', { ascending: false })
-
-      if (error) throw error
+      const data = await fetchManagedApplications()
       setApplications(data || [])
     } catch (err) {
       console.error('Error fetching applications:', err)
-      setMessage({
-        type: 'error',
-        text: err.message || 'Başvurular yüklenirken bir hata oluştu.',
-      })
+      showToast.error('Hata Oluştu', getErrorMessage(err) || 'Başvurular yüklenirken bir hata oluştu.')
       setApplications([])
     } finally {
       setIsLoading(false)
@@ -431,38 +486,16 @@ export default function HRApplications() {
     try {
       setUpdatingStatus(shortCode)
 
-      const { data: statusRow, error: statusError } = await supabase
-        .from('GNL_ST')
-        .select('GNL_ST_ID, NAME, SHRT_CODE')
-        .eq('ENT_CODE_NAME', 'APP')
-        .eq('SHRT_CODE', shortCode)
-        .single()
-
-      if (statusError) throw statusError
-
-      const { error: updateError } = await supabase
-        .from('APP')
-        .update({ ST_ID: statusRow.GNL_ST_ID })
-        .eq('APP_ID', appId)
-
-      if (updateError) throw updateError
-
-      const nextStatus = {
-        NAME: statusRow.NAME,
-        SHRT_CODE: statusRow.SHRT_CODE,
-      }
+      const updated = await updateApplicationStatus(appId, shortCode)
 
       setApplications((prev) =>
-        prev.map((app) => (app.APP_ID === appId ? { ...app, GNL_ST: nextStatus } : app))
+        prev.map((app) => (app.appId === appId ? updated : app))
       )
-      setSelectedApp((prev) => (prev && prev.APP_ID === appId ? { ...prev, GNL_ST: nextStatus } : prev))
-      setMessage({ type: 'success', text: 'Başvuru durumu güncellendi.' })
+      setSelectedApp((prev) => (prev && prev.appId === appId ? updated : prev))
+      showToast.success('Başarılı', 'Başvuru durumu güncellendi.')
     } catch (err) {
       console.error('Error updating application status:', err)
-      setMessage({
-        type: 'error',
-        text: err.message || 'Durum güncellenirken bir hata oluştu.',
-      })
+      showToast.error('Hata Oluştu', getErrorMessage(err) || 'Durum güncellenirken bir hata oluştu.')
     } finally {
       setUpdatingStatus(null)
     }
@@ -470,7 +503,7 @@ export default function HRApplications() {
 
   const filteredApplications = applications.filter((app) => {
     if (activeFilter === 'ALL') return true
-    return unwrapRelation(app.GNL_ST)?.SHRT_CODE === activeFilter
+    return normalizeStatusCode(app.status?.shrtCode) === activeFilter
   })
 
   if (isLoading) {
@@ -490,18 +523,6 @@ export default function HRApplications() {
         <h1 className="text-2xl font-bold text-slate-800">Başvurular</h1>
         <p className="text-sm text-slate-600 mt-1">Tüm iş başvurularını görüntüleyin ve yönetin</p>
       </div>
-
-      {message.text && (
-        <div
-          className={`rounded-lg px-4 py-3 text-sm font-medium ${
-            message.type === 'success'
-              ? 'bg-green-50 text-green-800 border border-green-200'
-              : 'bg-red-50 text-red-800 border border-red-200'
-          }`}
-        >
-          {message.text}
-        </div>
-      )}
 
       <div className="flex flex-wrap gap-2">
         {FILTER_OPTIONS.map((option) => {
@@ -554,25 +575,34 @@ export default function HRApplications() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredApplications.map((application) => {
-                  const user = unwrapRelation(application.USER)
-                  const post = unwrapRelation(application.POST)
-
                   return (
-                    <tr key={application.APP_ID} className="hover:bg-slate-50">
+                    <tr key={application.appId} className="hover:bg-slate-50">
                       <td className="px-5 py-4">
-                        <div className="font-medium text-slate-800">{getFullName(user)}</div>
-                        {user?.EMAIL && (
-                          <div className="text-xs text-slate-500 mt-0.5">{user.EMAIL}</div>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedApp(application)}
+                          className="text-left font-medium text-blue-700 hover:text-blue-800 hover:underline"
+                        >
+                          {getFullName(application)}
+                        </button>
+                        {application.candidateEmail && (
+                          <div className="text-xs text-slate-500 mt-0.5">{application.candidateEmail}</div>
                         )}
                       </td>
-                      <td className="px-5 py-4 text-slate-700">
-                        {post?.TITLE || 'İlan başlığı yok'}
+                      <td className="px-5 py-4">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedJob(application)}
+                          className="text-left font-medium text-blue-700 hover:text-blue-800 hover:underline"
+                        >
+                          {application.postTitle || 'İlan başlığı yok'}
+                        </button>
                       </td>
                       <td className="px-5 py-4 text-slate-600 whitespace-nowrap">
-                        {formatDate(application.CDATE)}
+                        {formatDate(application.appliedDate)}
                       </td>
                       <td className="px-5 py-4">
-                        <StatusBadge status={application.GNL_ST} />
+                        <StatusBadge status={application.status} />
                       </td>
                       <td className="px-5 py-4 text-right">
                         <button
@@ -598,6 +628,13 @@ export default function HRApplications() {
           onClose={() => setSelectedApp(null)}
           onUpdateStatus={updateStatus}
           updatingStatus={updatingStatus}
+        />
+      )}
+
+      {selectedJob && (
+        <JobDetailsModal
+          selectedJob={selectedJob}
+          onClose={() => setSelectedJob(null)}
         />
       )}
     </div>

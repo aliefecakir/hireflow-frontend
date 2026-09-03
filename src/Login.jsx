@@ -1,7 +1,10 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Home } from 'lucide-react'
+import { getErrorMessage, isSessionFresh, setAccessToken } from './api/client'
+import { useAuth } from './AuthContext'
 import { supabase } from './supabaseClient'
+import { showToast } from './toast/ToastProvider'
 
 const ROLE_ROUTES = {
   CAND: '/candidate/posts',
@@ -9,54 +12,27 @@ const ROLE_ROUTES = {
   MNGR: '/manager',
 }
 
-async function fetchRoleRoute(userId) {
-  const { data, error } = await supabase
-    .from('USER_ROLE')
-    .select('GNL_TP(SHRT_CODE)')
-    .eq('USER_ID', userId)
-    .limit(1)
-    .maybeSingle()
+const LOGIN_INTENT_KEY = 'hireflow.loginIntent'
 
-  if (error) {
-    throw error
-  }
+function markLoginIntent() {
+  sessionStorage.setItem(LOGIN_INTENT_KEY, '1')
+}
 
-  if (!data) {
-    throw new Error('Hesabınıza tanımlı bir rol bulunamadı.')
-  }
-
-  const shortCode = data?.GNL_TP?.SHRT_CODE
-  const route = ROLE_ROUTES[shortCode]
-
-  if (!route) {
-    throw new Error('Hesabınıza tanımlı bir rol bulunamadı.')
-  }
-
-  return route
+function consumeLoginIntent() {
+  const value = sessionStorage.getItem(LOGIN_INTENT_KEY) === '1'
+  sessionStorage.removeItem(LOGIN_INTENT_KEY)
+  return value
 }
 
 export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [message, setMessage] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const navigate = useNavigate()
   const redirectingRef = useRef(false)
-
-  const redirectByRole = useCallback(async (userId) => {
-    if (!userId || redirectingRef.current) return
-    redirectingRef.current = true
-
-    try {
-      const route = await fetchRoleRoute(userId)
-      navigate(route, { replace: true })
-    } catch (err) {
-      redirectingRef.current = false
-      setMessage(err.message || 'Hesabınıza tanımlı bir rol bulunamadı.')
-      setLoading(false)
-    }
-  }, [navigate])
+  const userAttemptedLoginRef = useRef(false)
+  const { session, userRole, profileError, loading: authLoading } = useAuth()
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -68,33 +44,39 @@ export default function Login() {
       hashParams.get('error')
 
     if (oauthError) {
-      setMessage(oauthError)
+      userAttemptedLoginRef.current = true
+      showToast.error('Hata Oluştu', oauthError)
     }
 
-    const redirectIfSignedIn = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session?.user) {
-        await redirectByRole(session.user.id)
+    if (consumeLoginIntent()) {
+      userAttemptedLoginRef.current = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (authLoading || redirectingRef.current) return
+    if (session && userRole && isSessionFresh(session)) {
+      const route = ROLE_ROUTES[userRole]
+      if (route) {
+        redirectingRef.current = true
+        sessionStorage.removeItem(LOGIN_INTENT_KEY)
+        navigate(route, { replace: true })
       }
     }
+  }, [authLoading, session, userRole, navigate])
 
-    redirectIfSignedIn()
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user) {
-          redirectByRole(session.user.id)
-        }
-      }
-    )
-
-    return () => subscription.unsubscribe()
-  }, [redirectByRole])
+  useEffect(() => {
+    if (userAttemptedLoginRef.current && profileError) {
+      showToast.error('Hata Oluştu', profileError)
+      setLoading(false)
+    }
+  }, [profileError])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setLoading(true)
-    setMessage('')
+    userAttemptedLoginRef.current = true
+    markLoginIntent()
 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -106,16 +88,23 @@ export default function Login() {
         throw error
       }
 
-      await redirectByRole(data.user.id)
+      if (!data.session?.access_token) {
+        throw new Error('Oturum oluşturulamadı. Lütfen tekrar deneyin.')
+      }
+
+      setAccessToken(data.session.access_token)
+      // Profil tek yerden çekilsin: AuthContext SIGNED_IN. Çift /users/me 500'e yol açıyordu.
     } catch (err) {
-      setMessage(err.message || 'Invalid email or password.')
+      console.error('Giriş isteği başarısız:', err)
+      showToast.error('Hata Oluştu', getErrorMessage(err) || 'Invalid email or password.')
       setLoading(false)
     }
   }
 
   const handleMicrosoftSignIn = async () => {
     setLoading(true)
-    setMessage('')
+    userAttemptedLoginRef.current = true
+    markLoginIntent()
 
     try {
       const { error } = await supabase.auth.signInWithOAuth({
@@ -130,7 +119,8 @@ export default function Login() {
         throw error
       }
     } catch (err) {
-      setMessage(err.message || 'Microsoft ile giriş başlatılamadı.')
+      console.error('Microsoft girişi başarısız:', err)
+      showToast.error('Hata Oluştu', getErrorMessage(err) || 'Microsoft ile giriş başlatılamadı.')
       setLoading(false)
     }
   }
@@ -252,16 +242,6 @@ export default function Login() {
           Sign in with Microsoft
         </button>
         <p className="mt-2 text-center text-xs text-slate-400">Employees only</p>
-
-        {message && (
-          <div className={`mt-4 p-3 rounded text-sm border ${
-            message.includes('success') || message.includes('Successfully')
-              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-              : 'bg-rose-50 text-rose-800 border-rose-200'
-          }`}>
-            {message}
-          </div>
-        )}
 
         <div className="mt-6 pt-6 border-t border-slate-100 text-center text-sm text-slate-500">
           Don't have an account?{' '}

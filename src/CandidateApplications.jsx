@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
-import { supabase } from './supabaseClient'
 import { useAuth } from './AuthContext'
+import { fetchMyApplications } from './api/applications'
+import { getErrorMessage } from './api/client'
+import { showToast } from './toast/ToastProvider'
 
 const STEPS = [
   { id: 1, label: 'Başvuru Alındı' },
@@ -8,16 +10,25 @@ const STEPS = [
   { id: 3, label: 'Sonuç' },
 ]
 
-function getTimelineState(shortCode) {
+function normalizeStatusCode(shortCode) {
   const code = (shortCode || '').toUpperCase()
+  if (code === 'DISPATCHED') return 'WAIT'
+  if (code === 'PROCESS') return 'REVIEW'
+  if (code === 'APPRV') return 'APPR'
+  if (code === 'RJCTD') return 'REJ'
+  return code
+}
 
-  if (code === 'APPRV') {
+function getTimelineState(shortCode) {
+  const code = normalizeStatusCode(shortCode)
+
+  if (code === 'APPR') {
     return { reachedStep: 3, outcome: 'approved' }
   }
-  if (code === 'RJCTD') {
+  if (code === 'REJ') {
     return { reachedStep: 3, outcome: 'rejected' }
   }
-  if (code === 'WAIT' || code === 'PROCESS') {
+  if (code === 'WAIT' || code === 'REVIEW') {
     return { reachedStep: 2, outcome: null }
   }
   return { reachedStep: 1, outcome: null }
@@ -30,11 +41,6 @@ function formatApplicationDate(cdate) {
     month: 'long',
     year: 'numeric',
   })
-}
-
-function unwrapRelation(value) {
-  if (Array.isArray(value)) return value[0] || null
-  return value || null
 }
 
 const STATUS_VISUALS = {
@@ -50,17 +56,35 @@ const STATUS_VISUALS = {
     panel: 'from-amber-50 to-orange-100 border-amber-200',
     accent: 'text-amber-800',
   },
+  REVIEW: {
+    title: 'Değerlendiriliyor',
+    caption: 'Başvurunuz inceleme ve değerlendirme sürecinde.',
+    panel: 'from-indigo-50 to-violet-100 border-indigo-200',
+    accent: 'text-indigo-800',
+  },
   PROCESS: {
     title: 'Değerlendiriliyor',
     caption: 'Başvurunuz inceleme ve değerlendirme sürecinde.',
     panel: 'from-indigo-50 to-violet-100 border-indigo-200',
     accent: 'text-indigo-800',
   },
+  APPR: {
+    title: 'Onaylandı',
+    caption: 'Tebrikler! Başvurunuz olumlu sonuçlandı.',
+    panel: 'from-emerald-50 to-green-100 border-emerald-200',
+    accent: 'text-emerald-800',
+  },
   APPRV: {
     title: 'Onaylandı',
     caption: 'Tebrikler! Başvurunuz olumlu sonuçlandı.',
     panel: 'from-emerald-50 to-green-100 border-emerald-200',
     accent: 'text-emerald-800',
+  },
+  REJ: {
+    title: 'Sonuçlanmadı',
+    caption: 'Başvurunuz bu ilan için olumlu sonuçlanmadı.',
+    panel: 'from-rose-50 to-red-100 border-rose-200',
+    accent: 'text-red-800',
   },
   RJCTD: {
     title: 'Sonuçlanmadı',
@@ -156,8 +180,11 @@ function StatusIllustration({ shortCode, className = 'w-20 h-20' }) {
   const visuals = {
     DISPATCHED: <VisualDispatched />,
     WAIT: <VisualWait />,
+    REVIEW: <VisualProcess />,
     PROCESS: <VisualProcess />,
+    APPR: <VisualApproved />,
     APPRV: <VisualApproved />,
+    REJ: <VisualRejected />,
     RJCTD: <VisualRejected />,
   }
 
@@ -165,7 +192,7 @@ function StatusIllustration({ shortCode, className = 'w-20 h-20' }) {
 }
 
 function StepIllustration({ stepId, shortCode }) {
-  const code = (shortCode || 'DISPATCHED').toUpperCase()
+  const code = normalizeStatusCode(shortCode)
   const { reachedStep, outcome } = getTimelineState(code)
 
   if (stepId === 1) return <VisualDispatched />
@@ -198,7 +225,7 @@ function StatusSpotlight({ shortCode, statusName, statusDescr }) {
 }
 
 function StatusTimeline({ shortCode }) {
-  const code = (shortCode || 'DISPATCHED').toUpperCase()
+  const code = normalizeStatusCode(shortCode)
   const { reachedStep, outcome } = getTimelineState(code)
 
   const getFrameClass = (stepId) => {
@@ -213,7 +240,7 @@ function StatusTimeline({ shortCode }) {
     if (code === 'WAIT' && stepId === 2) {
       return `bg-amber-50 border-amber-300 ${isCurrent ? 'ring-4 ring-amber-100' : ''}`
     }
-    if (code === 'PROCESS' && stepId === 2) {
+    if (code === 'REVIEW' && stepId === 2) {
       return `bg-indigo-50 border-indigo-300 ${isCurrent ? 'ring-4 ring-indigo-100' : ''}`
     }
     return `bg-blue-50 border-blue-300 ${isCurrent ? 'ring-4 ring-blue-100' : ''}`
@@ -231,13 +258,13 @@ function StatusTimeline({ shortCode }) {
     if (stepId === 3 && outcome === 'approved') return 'text-green-700'
     if (stepId === 3 && outcome === 'rejected') return 'text-red-700'
     if (code === 'WAIT' && stepId === 2) return 'text-amber-700'
-    if (code === 'PROCESS' && stepId === 2) return 'text-indigo-700'
+    if (code === 'REVIEW' && stepId === 2) return 'text-indigo-700'
     return 'text-blue-700'
   }
 
   const getStepLabel = (step) => {
     if (step.id === 2 && code === 'WAIT') return 'Sırada'
-    if (step.id === 2 && code === 'PROCESS') return 'İncelemede'
+    if (step.id === 2 && code === 'REVIEW') return 'İncelemede'
     if (step.id === 3 && outcome === 'approved') return 'Onaylandı'
     if (step.id === 3 && outcome === 'rejected') return 'Olumsuz'
     return step.label
@@ -274,30 +301,20 @@ export default function CandidateApplications() {
 
   const [applications, setApplications] = useState([])
   const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState('')
 
   useEffect(() => {
     if (!authUserId) return
-    fetchApplications(authUserId)
+    fetchApplications()
   }, [authUserId])
 
-  const fetchApplications = async (userId) => {
+  const fetchApplications = async () => {
     try {
       setIsLoading(true)
-      setError('')
-
-      const { data, error: fetchError } = await supabase
-        .from('APP')
-        .select('APP_ID, CDATE, POST:POST_ID (TITLE, DESCR, REQ_DEPT, REQ_TECH), GNL_ST:ST_ID (NAME, SHRT_CODE, DESCR)')
-        .eq('CNDT_ID', userId)
-        .order('CDATE', { ascending: false })
-
-      if (fetchError) throw fetchError
-
+      const data = await fetchMyApplications()
       setApplications(data || [])
     } catch (err) {
       console.error('Error fetching applications:', err)
-      setError(err.message || 'Başvurular yüklenirken bir hata oluştu.')
+      showToast.error('Hata Oluştu', getErrorMessage(err) || 'Başvurular yüklenirken bir hata oluştu.')
       setApplications([])
     } finally {
       setIsLoading(false)
@@ -322,12 +339,6 @@ export default function CandidateApplications() {
         <p className="text-sm text-slate-600 mt-1">Yaptığınız iş başvurularını ve durumlarını görüntüleyin</p>
       </div>
 
-      {error && (
-        <div className="rounded-lg px-4 py-3 text-sm font-medium bg-red-50 text-red-800 border border-red-200">
-          {error}
-        </div>
-      )}
-
       {applications.length === 0 ? (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
           <div className="text-center py-12">
@@ -341,60 +352,60 @@ export default function CandidateApplications() {
       ) : (
         <div className="space-y-4">
           {applications.map((application) => {
-            const post = unwrapRelation(application.POST)
-            const status = unwrapRelation(application.GNL_ST)
+            const status = application.status
+            const statusCode = normalizeStatusCode(status?.shrtCode)
 
             return (
               <div
-                key={application.APP_ID}
+                key={application.appId}
                 className="bg-white rounded-lg shadow-sm border border-gray-200 p-5"
               >
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
                   <div className="min-w-0">
                     <h3 className="text-lg font-semibold text-slate-800">
-                      {post?.TITLE || 'İlan başlığı yok'}
+                      {application.postTitle || 'İlan başlığı yok'}
                     </h3>
-                    {post?.DESCR && (
+                    {application.postDescr && (
                       <p className="text-slate-600 text-sm mt-2 leading-relaxed whitespace-pre-wrap">
-                        {post.DESCR}
+                        {application.postDescr}
                       </p>
                     )}
                     <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-slate-600">
-                      {post?.REQ_DEPT && (
+                      {application.postReqDept && (
                         <div className="flex items-center">
                           <svg className="h-4 w-4 mr-1.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                           </svg>
                           <span className="font-medium text-slate-700">Departman:</span>
-                          <span className="ml-1">{post.REQ_DEPT}</span>
+                          <span className="ml-1">{application.postReqDept}</span>
                         </div>
                       )}
-                      {post?.REQ_TECH && (
+                      {application.postReqTech && (
                         <div className="flex items-center">
                           <svg className="h-4 w-4 mr-1.5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
                           </svg>
                           <span className="font-medium text-slate-700">Teknolojiler:</span>
-                          <span className="ml-1">{post.REQ_TECH}</span>
+                          <span className="ml-1">{application.postReqTech}</span>
                         </div>
                       )}
                     </div>
                   </div>
                   <div className="flex flex-col items-start sm:items-end gap-1 shrink-0">
                     <span className="text-sm text-slate-500">
-                      {formatApplicationDate(application.CDATE)}
+                      {formatApplicationDate(application.appliedDate)}
                     </span>
-                    {status?.NAME && (
+                    {status?.name && (
                       <span
                         className={`text-xs font-medium px-2.5 py-1 rounded-full ${
-                          status.SHRT_CODE === 'APPRV'
+                          statusCode === 'APPR'
                             ? 'bg-green-50 text-green-700'
-                            : status.SHRT_CODE === 'RJCTD'
+                            : statusCode === 'REJ'
                               ? 'bg-red-50 text-red-700'
                               : 'bg-blue-50 text-blue-700'
                         }`}
                       >
-                        {status.NAME}
+                        {status.name}
                       </span>
                     )}
                   </div>
@@ -402,11 +413,11 @@ export default function CandidateApplications() {
 
                 <div className="pt-4 border-t border-slate-200 space-y-4">
                   <StatusSpotlight
-                    shortCode={status?.SHRT_CODE}
-                    statusName={status?.NAME}
-                    statusDescr={status?.DESCR}
+                    shortCode={status?.shrtCode}
+                    statusName={status?.name}
+                    statusDescr={status?.descr}
                   />
-                  <StatusTimeline shortCode={status?.SHRT_CODE} />
+                  <StatusTimeline shortCode={status?.shrtCode} />
                 </div>
               </div>
             )

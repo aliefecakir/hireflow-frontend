@@ -1,15 +1,17 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Link, Outlet, useNavigate } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import { useAuth } from './AuthContext'
-import { supabase } from './supabaseClient'
+
+function displayName(profile) {
+  return [profile?.firstName, profile?.lastName].filter(Boolean).join(' ').trim()
+}
 
 export default function HRLayout() {
-  const [userName, setUserName] = useState('')
-  const [loading, setLoading] = useState(true)
   const [showProfileMenu, setShowProfileMenu] = useState(false)
-  const { signOut } = useAuth()
+  const { signOut, userProfile } = useAuth()
   const navigate = useNavigate()
+  const userName = displayName(userProfile)
 
   const menuItems = [
     {
@@ -32,32 +34,6 @@ export default function HRLayout() {
     },
   ]
 
-  useEffect(() => {
-    fetchUserData()
-  }, [])
-
-  const fetchUserData = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      
-      if (user) {
-        const { data, error } = await supabase
-          .from('USER')
-          .select('NAME')
-          .eq('USER_ID', user.id)
-          .single()
-
-        if (data && !error) {
-          setUserName(data.NAME)
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching user data:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const handleSignOut = async () => {
     try {
       await signOut()
@@ -71,13 +47,13 @@ export default function HRLayout() {
     <div className="min-h-screen bg-gray-100 flex flex-col">
       {/* Top Header - Full Width */}
       <header className="w-full bg-white border-b border-gray-200 flex-shrink-0 shadow-sm">
-        <div className="px-6 py-4 flex items-center justify-between">
+        <div className="h-12 px-6 flex items-center justify-between">
           {/* Left Side - Logo */}
           <Link to="/hr/jobs" className="flex items-center space-x-2 group">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg flex items-center justify-center shadow-sm group-hover:shadow-md transition-shadow">
-              <span className="text-white font-bold text-sm">HF</span>
+            <div className="w-7 h-7 bg-gradient-to-br from-blue-600 to-blue-700 rounded-md flex items-center justify-center shadow-sm group-hover:shadow-md transition-shadow">
+              <span className="text-white font-bold text-xs">HF</span>
             </div>
-            <h1 className="text-xl font-bold text-slate-800 group-hover:text-blue-700 transition-colors">
+            <h1 className="text-base font-bold text-slate-800 group-hover:text-blue-700 transition-colors">
               HireFlow
             </h1>
           </Link>
@@ -85,21 +61,21 @@ export default function HRLayout() {
           {/* Right Side - User Profile Section */}
           <div className="relative">
             <div 
-              className="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors"
+              className="flex items-center gap-2 px-2 py-1 rounded-md hover:bg-slate-50 cursor-pointer transition-colors"
               onClick={() => setShowProfileMenu(!showProfileMenu)}
             >
               {/* Profile Picture */}
-              <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-full flex items-center justify-center shadow-sm">
-                <span className="text-white font-semibold text-sm">
-                  {loading ? '...' : userName.charAt(0).toUpperCase()}
+              <div className="w-7 h-7 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-full flex items-center justify-center shadow-sm">
+                <span className="text-white font-semibold text-xs">
+                  {(userName.charAt(0) || 'H').toUpperCase()}
                 </span>
               </div>
               
               {/* Welcome Text */}
-              <div className="flex flex-col">
-                <span className="text-xs text-slate-500">İnsan Kaynakları</span>
+              <div className="flex flex-col leading-tight">
+                <span className="text-[11px] text-slate-500">İnsan Kaynakları</span>
                 <span className="text-sm font-medium text-slate-800">
-                  {loading ? 'Yükleniyor...' : userName}
+                  {userName || 'İnsan Kaynakları'}
                 </span>
               </div>
 

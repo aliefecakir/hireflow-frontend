@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from './AuthContext'
 import { supabase } from './supabaseClient'
+import { showToast } from './toast/ToastProvider'
 
 function toTitleCaseName(value) {
   return (value || '')
@@ -27,7 +28,6 @@ export default function Register() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [termsAccepted, setTermsAccepted] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [message, setMessage] = useState('')
   const navigate = useNavigate()
   const { user, loading: authLoading } = useAuth()
 
@@ -41,17 +41,16 @@ export default function Register() {
     e.preventDefault()
 
     if (password !== confirmPassword) {
-      setMessage('Passwords do not match!')
+      showToast.warning('Eksik Bilgi', 'Passwords do not match!')
       return
     }
 
     if (!termsAccepted) {
-      setMessage('You must accept the terms and conditions.')
+      showToast.warning('Eksik Bilgi', 'You must accept the terms and conditions.')
       return
     }
 
     setLoading(true)
-    setMessage('')
 
     try {
       const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -70,7 +69,7 @@ export default function Register() {
       }
 
       if (authData?.user) {
-        setMessage('Account created successfully! You can now log in.')
+        showToast.success('Başarılı', 'Account created successfully! You can now log in.')
         setFirstName('')
         setSurname('')
         setEmail('')
@@ -81,7 +80,7 @@ export default function Register() {
 
     } catch (err) {
       setLoading(false)
-      setMessage(err.message || 'An error occurred during registration.')
+      showToast.error('Hata Oluştu', err.message || 'An error occurred during registration.')
     } finally {
       setLoading(false)
     }
@@ -232,16 +231,6 @@ export default function Register() {
             {loading ? 'Creating account...' : 'Create Account'}
           </button>
         </form>
-
-        {message && (
-          <div className={`mt-4 p-3 rounded text-sm border ${
-            message.includes('successfully') || message.includes('Successfully')
-              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-              : 'bg-rose-50 text-rose-800 border-rose-200'
-          }`}>
-            {message}
-          </div>
-        )}
 
         <div className="mt-6 pt-6 border-t border-slate-100 text-center text-sm text-slate-500">
           Already have an account?{' '}
