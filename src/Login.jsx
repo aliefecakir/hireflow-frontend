@@ -101,30 +101,6 @@ export default function Login() {
     }
   }
 
-  const handleMicrosoftSignIn = async () => {
-    setLoading(true)
-    userAttemptedLoginRef.current = true
-    markLoginIntent()
-
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'azure',
-        options: {
-          scopes: 'email profile',
-          redirectTo: `${window.location.origin}${window.location.pathname}`,
-        },
-      })
-
-      if (error) {
-        throw error
-      }
-    } catch (err) {
-      console.error('Microsoft girişi başarısız:', err)
-      showToast.error('Hata Oluştu', getErrorMessage(err) || 'Microsoft ile giriş başlatılamadı.')
-      setLoading(false)
-    }
-  }
-
   return (
     <div className="fixed inset-0 bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4 overflow-y-auto">
       <div className="w-full max-w-md bg-white border border-slate-100 shadow-xl rounded-xl p-10 md:p-12">
@@ -217,31 +193,6 @@ export default function Login() {
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
-
-        <div className="relative my-5">
-          <div className="absolute inset-0 flex items-center" aria-hidden="true">
-            <div className="w-full border-t border-slate-200" />
-          </div>
-          <div className="relative flex justify-center">
-            <span className="bg-white px-3 text-xs font-medium text-slate-400">or</span>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={handleMicrosoftSignIn}
-          disabled={loading}
-          className="w-full py-2 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 font-medium rounded-lg text-sm disabled:opacity-50 transition-all duration-200 shadow-sm cursor-pointer flex items-center justify-center gap-2.5"
-        >
-          <svg className="h-4 w-4" viewBox="0 0 23 23" aria-hidden="true">
-            <rect x="1" y="1" width="10" height="10" fill="#F25022" />
-            <rect x="12" y="1" width="10" height="10" fill="#7FBA00" />
-            <rect x="1" y="12" width="10" height="10" fill="#00A4EF" />
-            <rect x="12" y="12" width="10" height="10" fill="#FFB900" />
-          </svg>
-          Sign in with Microsoft
-        </button>
-        <p className="mt-2 text-center text-xs text-slate-400">Employees only</p>
 
         <div className="mt-6 pt-6 border-t border-slate-100 text-center text-sm text-slate-500">
           Don't have an account?{' '}

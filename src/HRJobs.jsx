@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { createPost, fetchManagedPosts, updatePost, updatePostStatus } from './api/posts'
+import { createPost, fetchManagedPosts, updatePost } from './api/posts'
 import { getErrorMessage } from './api/client'
 import { showToast } from './toast/ToastProvider'
 
@@ -27,7 +27,6 @@ export default function HRJobs() {
   const [showAddForm, setShowAddForm] = useState(false)
   const [loading, setLoading] = useState(false)
   const [listLoading, setListLoading] = useState(true)
-  const [updatingStatusId, setUpdatingStatusId] = useState(null)
   const [jobs, setJobs] = useState([])
   const [editingJob, setEditingJob] = useState(null)
 
@@ -117,33 +116,6 @@ export default function HRJobs() {
       statusCode: job.status?.shrtCode || 'ACTV',
     })
     setShowAddForm(false)
-  }
-
-  const toggleJobStatus = async (job) => {
-    const currentCode = job.status?.shrtCode
-    const nextCode = currentCode === 'ACTV' ? 'PASS' : 'ACTV'
-    setUpdatingStatusId(job.postId)
-
-    try {
-      await updatePostStatus(job.postId, nextCode)
-      await fetchJobs({ silent: true })
-      showToast.success(
-        'Başarılı',
-        nextCode === 'PASS' ? 'İlan pasife alındı.' : 'İlan aktife alındı.'
-      )
-    } catch (error) {
-      console.error('Durum değiştirme hatası:', error)
-      showToast.error('Hata Oluştu', getErrorMessage(error) || 'İlan durumu güncellenirken bir hata oluştu.')
-    } finally {
-      setUpdatingStatusId(null)
-    }
-  }
-
-  const getStatusToggleText = (job) => {
-    if (job.status?.shrtCode === 'ACTV') {
-      return 'Pasife Al'
-    }
-    return 'Aktife Al'
   }
 
   return (
@@ -356,19 +328,12 @@ export default function HRJobs() {
                         )}
                       </div>
                     </div>
-                    <div className="ml-4 flex flex-col items-end space-y-2">
+                    <div className="ml-4">
                       <button
                         onClick={() => handleEdit(job)}
                         className="text-blue-600 hover:text-blue-700 font-medium text-sm"
                       >
                         Düzenle
-                      </button>
-                      <button
-                        onClick={() => toggleJobStatus(job)}
-                        disabled={updatingStatusId === job.postId}
-                        className="text-amber-600 hover:text-amber-700 font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {updatingStatusId === job.postId ? 'Güncelleniyor...' : getStatusToggleText(job)}
                       </button>
                     </div>
                   </div>

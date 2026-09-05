@@ -5,6 +5,7 @@ import ProtectedRoute from './ProtectedRoute'
 import AuthLayout from './AuthLayout'
 import PortalSelection from './PortalSelection'
 import Academy from './Academy'
+import AcademyManager from './AcademyManager'
 import Login from './Login'
 import Register from './Register'
 import CandidateLayout from './CandidateLayout'
@@ -14,16 +15,6 @@ import CandidateApplications from './CandidateApplications'
 import HRLayout from './HRLayout'
 import HRJobs from './HRJobs'
 import HRApplications from './HRApplications'
-
-function ManagerPage() {
-  return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-8">
-      <h1 className="text-2xl font-semibold text-slate-800">
-        Yönetici Paneli
-      </h1>
-    </div>
-  )
-}
 
 export default function App() {
   return (
@@ -55,6 +46,7 @@ export default function App() {
 
           {/* Academy portal is public, no registration required */}
           <Route path="/academy" element={<Academy />} />
+          <Route path="/academy/manager" element={<AcademyManager />} />
           
           {/* Protected Candidate routes with nested routing */}
           <Route path="/candidate" element={
@@ -82,7 +74,7 @@ export default function App() {
           {/* Protected role-specific panels */}
           <Route path="/manager" element={
             <ProtectedRoute allowedRoles={['MNGR']}>
-              <ManagerPage />
+              <AcademyManager />
             </ProtectedRoute>
           } />
           

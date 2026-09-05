@@ -1,5 +1,9 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Briefcase, Building2, GraduationCap } from 'lucide-react'
+import { getErrorMessage } from './api/client'
+import { supabase } from './supabaseClient'
+import { showToast } from './toast/ToastProvider'
 
 function Logo() {
   return (
@@ -15,18 +19,50 @@ function Logo() {
 }
 
 function PortalHeader() {
+  const [loading, setLoading] = useState(false)
+
+  const handleMicrosoftSignIn = async () => {
+    setLoading(true)
+    sessionStorage.setItem('hireflow.loginIntent', '1')
+
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'azure',
+        options: {
+          scopes: 'email profile',
+          redirectTo: `${window.location.origin}/login`,
+        },
+      })
+
+      if (error) {
+        throw error
+      }
+    } catch (err) {
+      console.error('Microsoft girişi başarısız:', err)
+      showToast.error('Hata Oluştu', getErrorMessage(err) || 'Microsoft ile giriş başlatılamadı.')
+      setLoading(false)
+    }
+  }
+
   return (
     <header className="sticky top-0 z-10 border-b border-slate-200/70 bg-white/80 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
         <Logo />
 
-        <Link
-          to="/hr/login"
-          className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:border-blue-300 hover:text-blue-700"
+        <button
+          type="button"
+          onClick={handleMicrosoftSignIn}
+          disabled={loading}
+          className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:border-blue-300 hover:text-blue-700 disabled:opacity-50"
         >
-          <Building2 className="h-4 w-4" />
-          HR Girişi
-        </Link>
+          <svg className="h-4 w-4" viewBox="0 0 23 23" aria-hidden="true">
+            <rect x="1" y="1" width="10" height="10" fill="#F25022" />
+            <rect x="12" y="1" width="10" height="10" fill="#7FBA00" />
+            <rect x="1" y="12" width="10" height="10" fill="#00A4EF" />
+            <rect x="12" y="12" width="10" height="10" fill="#FFB900" />
+          </svg>
+          {loading ? 'Yönlendiriliyor...' : 'Çalışan Girişi'}
+        </button>
       </div>
     </header>
   )
