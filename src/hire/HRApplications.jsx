@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { fetchManagedApplications, updateApplicationStatus } from './api/applications'
 import { fetchProfileByUserId } from './api/profile'
-import { getErrorMessage } from './api/client'
-import { showToast } from './toast/ToastProvider'
+import { getErrorMessage } from '../shared/api/client'
+import { showToast } from '../shared/toast/ToastProvider'
 
 const FILTER_OPTIONS = [
   { value: 'ALL', label: 'Tümü' },

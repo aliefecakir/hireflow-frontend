@@ -1,4 +1,4 @@
-import { apiRequest } from './client'
+import { apiRequest } from '../../shared/api/client'
 
 export interface ExperienceDto {
   experienceId: string

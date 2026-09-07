@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react'
 import { Link, Outlet, useNavigate } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import { fetchMyProfile } from './api/profile'
-import { useAuth } from './AuthContext'
+import BrandMark from '../shared/BrandMark'
+import { useAuth } from '../shared/AuthContext'
 
 export const PROFILE_PHOTO_CHANGED_EVENT = 'profile-photo-changed'
 
@@ -88,9 +89,7 @@ export default function CandidateLayout() {
         <div className="h-12 px-6 flex items-center justify-between">
           {/* Left Side - Logo */}
           <Link to="/candidate/posts" className="flex items-center space-x-2 group">
-            <div className="w-7 h-7 bg-gradient-to-br from-blue-600 to-blue-700 rounded-md flex items-center justify-center shadow-sm group-hover:shadow-md transition-shadow">
-              <span className="text-white font-bold text-xs">HF</span>
-            </div>
+            <BrandMark className="h-8 w-8" />
             <h1 className="text-base font-bold text-slate-800 group-hover:text-blue-700 transition-colors">
               HireFlow
             </h1>

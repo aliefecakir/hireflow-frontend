@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import { useAuth } from './AuthContext'
+import { useAuth } from '../shared/AuthContext'
 import { fetchMyApplications } from './api/applications'
-import { getErrorMessage } from './api/client'
-import { showToast } from './toast/ToastProvider'
+import { getErrorMessage } from '../shared/api/client'
+import { showToast } from '../shared/toast/ToastProvider'
 
 const STEPS = [
   { id: 1, label: 'Başvuru Alındı' },

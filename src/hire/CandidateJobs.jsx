@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
-import { useAuth } from './AuthContext'
+import { useAuth } from '../shared/AuthContext'
 import { fetchMyProfile } from './api/profile'
 import { fetchActivePosts } from './api/posts'
 import { applyToPost } from './api/applications'
-import { getErrorMessage } from './api/client'
-import { showToast } from './toast/ToastProvider'
+import { getErrorMessage } from '../shared/api/client'
+import { showToast } from '../shared/toast/ToastProvider'
 
 export default function CandidateJobs() {
   const { user } = useAuth()

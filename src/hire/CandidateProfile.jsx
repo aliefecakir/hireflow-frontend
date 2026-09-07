@@ -1,14 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
 import PhoneInput, { isValidPhoneNumber } from 'react-phone-number-input'
 import 'react-phone-number-input/style.css'
-import { supabase } from './supabaseClient'
+import { supabase } from '../shared/supabaseClient'
 import SkillsModal from './SkillsModal'
 import LanguagesModal from './LanguagesModal'
 import { PROFILE_PHOTO_CHANGED_EVENT } from './CandidateLayout'
-import departmentCatalog from './resources/departments.json'
+import departmentCatalog from '../resources/departments.json'
 import { fetchLanguages, fetchMyProfile, updateMyProfile } from './api/profile'
-import { getErrorMessage } from './api/client'
-import { showToast } from './toast/ToastProvider'
+import { getErrorMessage } from '../shared/api/client'
+import { showToast } from '../shared/toast/ToastProvider'
 
 const notifyHeaderPhotoChange = (nextUrl) => {
   window.dispatchEvent(new CustomEvent(PROFILE_PHOTO_CHANGED_EVENT, {

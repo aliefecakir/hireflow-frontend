@@ -1,16 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Home } from 'lucide-react'
+import { resolveHomeRoute } from './api/auth'
 import { getErrorMessage, isSessionFresh, setAccessToken } from './api/client'
 import { useAuth } from './AuthContext'
 import { supabase } from './supabaseClient'
 import { showToast } from './toast/ToastProvider'
-
-const ROLE_ROUTES = {
-  CAND: '/candidate/posts',
-  HR: '/hr',
-  MNGR: '/manager',
-}
 
 const LOGIN_INTENT_KEY = 'hireflow.loginIntent'
 
@@ -32,7 +27,7 @@ export default function Login() {
   const navigate = useNavigate()
   const redirectingRef = useRef(false)
   const userAttemptedLoginRef = useRef(false)
-  const { session, userRole, profileError, loading: authLoading } = useAuth()
+  const { session, userRole, userProfile, profileError, loading: authLoading } = useAuth()
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -56,14 +51,14 @@ export default function Login() {
   useEffect(() => {
     if (authLoading || redirectingRef.current) return
     if (session && userRole && isSessionFresh(session)) {
-      const route = ROLE_ROUTES[userRole]
+      const route = resolveHomeRoute(userRole, userProfile?.roles)
       if (route) {
         redirectingRef.current = true
         sessionStorage.removeItem(LOGIN_INTENT_KEY)
         navigate(route, { replace: true })
       }
     }
-  }, [authLoading, session, userRole, navigate])
+  }, [authLoading, session, userRole, userProfile, navigate])
 
   useEffect(() => {
     if (userAttemptedLoginRef.current && profileError) {

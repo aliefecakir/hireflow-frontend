@@ -1,18 +1,63 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, Calendar, Code, GraduationCap, MonitorPlay } from 'lucide-react'
+import { ArrowLeft, Building2, Calendar, GraduationCap } from 'lucide-react'
+import { getForms } from '../api/forms'
+import { isFlagOn } from '../api/helpers'
+import { getErrorMessage } from '../../shared/api/client'
+import { showToast } from '../../shared/toast/ToastProvider'
 
-const activePrograms = [
-  {
-    id: '2026-q3',
-    title: '2026 3. Çeyrek HireFlow Yazılım Akademisi',
-    description: 'Backend ve Frontend alanlarında uzmanlaşmak, gerçek projelerde deneyim kazanmak ve ekibimizin bir parçası olmak için başvurunu yap.',
-    deadline: '15 Eylül 2026',
-    type: 'Uzaktan (Online) Eğitim',
-    topics: 'Frontend & Backend',
-  },
-]
+function formatDate(value) {
+  if (!value) return '—'
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return '—'
+  return parsed.toLocaleDateString('tr-TR', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+}
+
+function LoadingState({ label = 'Yükleniyor...' }) {
+  return (
+    <div className="text-center">
+      <div className="mx-auto inline-block h-12 w-12 animate-spin rounded-full border-b-2 border-blue-700" />
+      <p className="mt-4 font-medium text-slate-600">{label}</p>
+    </div>
+  )
+}
 
 export default function Academy() {
+  const [forms, setForms] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+
+    const loadForms = async () => {
+      try {
+        const data = await getForms()
+        if (!cancelled) {
+          setForms((Array.isArray(data) ? data : []).filter((form) => form.isActv == null || isFlagOn(form.isActv)))
+        }
+      } catch (error) {
+        console.error('Akademi formları yüklenemedi:', error)
+        if (!cancelled) {
+          setForms([])
+          showToast.error('Hata Oluştu', getErrorMessage(error) || 'Aktif formlar yüklenirken bir hata oluştu.')
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false)
+        }
+      }
+    }
+
+    loadForms()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="border-b border-slate-200/70 bg-white">
@@ -32,41 +77,38 @@ export default function Academy() {
       </header>
 
       <main className="flex items-center justify-center px-4 py-24">
-        {activePrograms.length > 0 ? (
-          <div className="grid w-full max-w-4xl mx-auto gap-6">
-            {activePrograms.map((program) => (
+        {loading ? (
+          <LoadingState />
+        ) : forms.length > 0 ? (
+          <div className="mx-auto grid w-full max-w-4xl gap-6">
+            {forms.map((form) => (
               <article
-                key={program.id}
+                key={form.formId}
                 className="overflow-hidden rounded-2xl bg-white shadow-md"
               >
                 <div className="h-1.5 bg-gradient-to-r from-blue-600 to-indigo-600" />
                 <div className="p-6 sm:p-8">
                   <h2 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
-                    {program.title}
+                    {form.title}
                   </h2>
-                  <p className="mt-3 text-sm leading-relaxed text-slate-500 sm:text-base">
-                    {program.description}
-                  </p>
                   <div className="mt-5 flex flex-wrap gap-2">
+                    {form.organizationName ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-50 px-3 py-1.5 text-xs font-medium text-violet-700">
+                        <Building2 className="h-3.5 w-3.5" />
+                        {form.organizationName}
+                      </span>
+                    ) : null}
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-50 px-3 py-1.5 text-xs font-medium text-orange-600">
                       <Calendar className="h-3.5 w-3.5" />
-                      {program.deadline}
-                    </span>
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700">
-                      <MonitorPlay className="h-3.5 w-3.5" />
-                      {program.type}
-                    </span>
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-50 px-3 py-1.5 text-xs font-medium text-violet-700">
-                      <Code className="h-3.5 w-3.5" />
-                      {program.topics}
+                      {formatDate(form.sdate)} – {formatDate(form.edate)}
                     </span>
                   </div>
                   <div className="mt-6 flex justify-end">
                     <Link
-                      to={`/academy/apply/${program.id}`}
+                      to={`/academy/apply/${form.formId}`}
                       className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
                     >
-                      Hemen Başvur ve Sınava Başla
+                      Hemen Başvur
                     </Link>
                   </div>
                 </div>

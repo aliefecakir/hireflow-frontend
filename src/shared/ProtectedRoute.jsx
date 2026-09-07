@@ -1,14 +1,9 @@
 import { Navigate } from 'react-router-dom'
+import { resolveHomeRoute } from './api/auth'
 import { useAuth } from './AuthContext'
 
-const ROLE_ROUTES = {
-  CAND: '/candidate',
-  HR: '/hr',
-  MNGR: '/manager',
-}
-
 export default function ProtectedRoute({ children, allowedRoles }) {
-  const { user, userRole, loading } = useAuth()
+  const { user, userRole, userProfile, loading } = useAuth()
 
   if (loading) {
     return (
@@ -42,7 +37,7 @@ export default function ProtectedRoute({ children, allowedRoles }) {
   }
 
   if (allowedRoles && !allowedRoles.includes(userRole)) {
-    const redirectTo = ROLE_ROUTES[userRole] || '/login'
+    const redirectTo = resolveHomeRoute(userRole, userProfile?.roles) || '/login'
     return <Navigate to={redirectTo} replace />
   }
 

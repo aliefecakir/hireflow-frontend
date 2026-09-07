@@ -1,6 +1,8 @@
 import { supabase } from '../supabaseClient'
 
-export const API_BASE_URL = 'http://localhost:8080/api/v1'
+export const API_ORIGIN = 'http://localhost:8080'
+export const API_BASE_URL = `${API_ORIGIN}/api/v1`
+export const ACADEMY_API_BASE_URL = `${API_ORIGIN}/api`
 
 const TOKEN_SKEW_SECONDS = 30
 
@@ -115,18 +117,21 @@ export async function getAccessToken(): Promise<string | null> {
   return session?.access_token ?? null
 }
 
-export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+type ApiRequestOptions = RequestInit & { baseUrl?: string; optionalAuth?: boolean }
+
+export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
+  const { baseUrl = API_BASE_URL, optionalAuth = false, ...fetchOptions } = options
   const token = await getAccessToken()
-  if (!token) {
+  if (!token && !optionalAuth) {
     throw new ApiError('Oturum bilgisi alınamadı. Lütfen sayfayı yenileyip tekrar deneyin.', 401)
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
+  const response = await fetch(`${baseUrl}${path}`, {
+    ...fetchOptions,
     headers: {
-      Authorization: `Bearer ${token}`,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       'Content-Type': 'application/json',
-      ...(options.headers || {}),
+      ...(fetchOptions.headers || {}),
     },
   })
 

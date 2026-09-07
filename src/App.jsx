@@ -1,54 +1,67 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
-import { AuthProvider } from './AuthContext'
-import { ToastProvider } from './toast/ToastProvider'
-import ProtectedRoute from './ProtectedRoute'
-import AuthLayout from './AuthLayout'
-import PortalSelection from './PortalSelection'
-import Academy from './Academy'
-import AcademyManager from './AcademyManager'
-import Login from './Login'
-import Register from './Register'
-import CandidateLayout from './CandidateLayout'
-import CandidateJobs from './CandidateJobs'
-import CandidateProfile from './CandidateProfile'
-import CandidateApplications from './CandidateApplications'
-import HRLayout from './HRLayout'
-import HRJobs from './HRJobs'
-import HRApplications from './HRApplications'
+import { AuthProvider } from './shared/AuthContext'
+import { ToastProvider } from './shared/toast/ToastProvider'
+import ProtectedRoute from './shared/ProtectedRoute'
+import AuthLayout from './shared/AuthLayout'
+import PortalSelection from './shared/PortalSelection'
+import { ACADEMY_MANAGER_ROLES } from './shared/api/auth'
+import Academy from './academy/public/Academy'
+import AcademyApply from './academy/public/AcademyApply'
+import AcademyManagerLayout from './academy/manager/AcademyManagerLayout'
+import FormListPage from './academy/manager/FormListPage'
+import CreateFormPage from './academy/manager/CreateFormPage'
+import QuestionPoolPage from './academy/manager/QuestionPoolPage'
+import ApplicationListPage from './academy/manager/ApplicationListPage'
+import Login from './shared/Login'
+import Register from './shared/Register'
+import CandidateLayout from './hire/CandidateLayout'
+import CandidateJobs from './hire/CandidateJobs'
+import CandidateProfile from './hire/CandidateProfile'
+import CandidateApplications from './hire/CandidateApplications'
+import HRLayout from './hire/HRLayout'
+import HRJobs from './hire/HRJobs'
+import HRApplications from './hire/HRApplications'
 
 export default function App() {
   return (
     <ToastProvider>
       <AuthProvider>
         <Routes>
-          {/* Landing page where users pick a portal */}
           <Route path="/" element={<PortalSelection />} />
 
-          {/* Auth routes with decorative background */}
           <Route path="/login" element={
             <AuthLayout>
               <Login />
             </AuthLayout>
           } />
 
-          {/* HR login reuses the shared form; the role lookup redirects HR users to /hr */}
           <Route path="/hr/login" element={
             <AuthLayout>
               <Login />
             </AuthLayout>
           } />
-          
+
           <Route path="/register" element={
             <AuthLayout>
               <Register />
             </AuthLayout>
           } />
 
-          {/* Academy portal is public, no registration required */}
           <Route path="/academy" element={<Academy />} />
-          <Route path="/academy/manager" element={<AcademyManager />} />
-          
-          {/* Protected Candidate routes with nested routing */}
+          <Route path="/academy/apply/:formId" element={<AcademyApply />} />
+          <Route path="/academy/manager" element={
+            <ProtectedRoute allowedRoles={[...ACADEMY_MANAGER_ROLES]}>
+              <AcademyManagerLayout />
+            </ProtectedRoute>
+          }>
+            <Route index element={<Navigate to="forms" replace />} />
+            <Route path="forms" element={<FormListPage />} />
+            <Route path="forms/:formId/applications" element={<ApplicationListPage />} />
+            <Route path="forms/:formId/edit" element={<CreateFormPage />} />
+            <Route path="create" element={<CreateFormPage />} />
+            <Route path="pool" element={<QuestionPoolPage />} />
+          </Route>
+
           <Route path="/candidate" element={
             <ProtectedRoute allowedRoles={['CAND']}>
               <CandidateLayout />
@@ -60,7 +73,6 @@ export default function App() {
             <Route path="applications" element={<CandidateApplications />} />
           </Route>
 
-          {/* Protected HR routes with nested routing */}
           <Route path="/hr" element={
             <ProtectedRoute allowedRoles={['HR']}>
               <HRLayout />
@@ -71,14 +83,7 @@ export default function App() {
             <Route path="applications" element={<HRApplications />} />
           </Route>
 
-          {/* Protected role-specific panels */}
-          <Route path="/manager" element={
-            <ProtectedRoute allowedRoles={['MNGR']}>
-              <AcademyManager />
-            </ProtectedRoute>
-          } />
-          
-          {/* Catch-all route redirecting back to portal selection */}
+          <Route path="/manager" element={<Navigate to="/academy/manager" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AuthProvider>

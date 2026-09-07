@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { createPost, fetchManagedPosts, updatePost } from './api/posts'
-import { getErrorMessage } from './api/client'
-import { showToast } from './toast/ToastProvider'
+import { getErrorMessage } from '../shared/api/client'
+import { showToast } from '../shared/toast/ToastProvider'
 
 const POST_STATUSES = [
   { code: 'ACTV', name: 'Aktif' },

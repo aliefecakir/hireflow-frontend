@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Briefcase, Building2, GraduationCap } from 'lucide-react'
+import { Building2, GraduationCap } from 'lucide-react'
+import BrandMark from './BrandMark'
 import { getErrorMessage } from './api/client'
 import { supabase } from './supabaseClient'
 import { showToast } from './toast/ToastProvider'
@@ -8,9 +9,7 @@ import { showToast } from './toast/ToastProvider'
 function Logo() {
   return (
     <Link to="/" className="flex items-center gap-2.5">
-      <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 shadow-sm">
-        <Briefcase className="h-5 w-5 text-white" />
-      </span>
+      <BrandMark className="h-10 w-10" />
       <span className="text-lg font-bold tracking-tight text-slate-900">
         Hire<span className="text-blue-600">Flow</span>
       </span>
