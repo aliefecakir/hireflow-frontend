@@ -15,13 +15,14 @@ export interface AcademyForm {
 export interface FormQuestion {
   questionId: number
   questionText: string
-  tpId: string
+  tpId: number
   minScore?: number | null
   maxScore?: number | null
   ordNo?: number | null
   isReq?: number | null
   isAssmt?: number | boolean | null
   tpShrtCode?: string | null
+  tpName?: string | null
   choices: QuestionChoice[]
 }
 

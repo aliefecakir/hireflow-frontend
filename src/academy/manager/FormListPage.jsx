@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CalendarRange, Pencil, Search } from 'lucide-react'
 import { getForms } from '../api/forms'
-import { isFlagOn } from '../api/helpers'
+import { isFormVisibleToCandidates } from '../api/helpers'
 import { getErrorMessage } from '../../shared/api/client'
 import { showToast } from '../../shared/toast/ToastProvider'
 import { formatDate, inputClass, LoadingState } from './ui'
@@ -80,7 +80,7 @@ export default function FormListPage() {
       ) : (
         <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
           {filteredForms.map((form) => {
-            const active = form.isActv == null || isFlagOn(form.isActv)
+            const active = isFormVisibleToCandidates(form)
             return (
               <div
                 key={form.formId}

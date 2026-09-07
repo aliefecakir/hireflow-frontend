@@ -6,7 +6,7 @@ export type { QuestionChoice, QuestionType }
 export interface Question {
   id: number
   questionText: string
-  tpId: string
+  tpId: number
   minScore: number
   maxScore: number
   isAssmt?: number | null
@@ -18,7 +18,7 @@ export interface Question {
 
 export interface CreateQuestionPayload {
   questionText: string
-  tpId: string
+  tpId: number
   minScore: number
   maxScore: number
   isAssmt?: number
@@ -32,7 +32,7 @@ export interface CreateQuestionPayload {
 
 export interface UpdateQuestionPayload {
   questionText?: string
-  tpId?: string
+  tpId?: number
   minScore?: number
   maxScore?: number
   isAssmt?: number
@@ -69,14 +69,20 @@ export function getQuestionUsage(questionId: number): Promise<QuestionUsage> {
 export function createQuestion(data: CreateQuestionPayload): Promise<Question> {
   return academyRequest<Question>('/academy/questions', {
     method: 'POST',
-    body: JSON.stringify(data),
+    body: JSON.stringify({
+      ...data,
+      tpId: Number(data.tpId),
+    }),
   })
 }
 
 export function updateQuestion(questionId: number, data: UpdateQuestionPayload): Promise<Question> {
   return academyRequest<Question>(`/academy/questions/${questionId}`, {
     method: 'PUT',
-    body: JSON.stringify(data),
+    body: JSON.stringify({
+      ...data,
+      tpId: data.tpId == null ? undefined : Number(data.tpId),
+    }),
   })
 }
 

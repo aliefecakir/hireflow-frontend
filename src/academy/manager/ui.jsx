@@ -19,6 +19,31 @@ export function renumberAttachments(map) {
   return next
 }
 
+export function prependAttachment(map, questionId, extra = {}) {
+  if (map[questionId]) return map
+  const next = {}
+  for (const [id, item] of Object.entries(map)) {
+    next[id] = { ...item, ordNo: Number(item.ordNo) + 1 }
+  }
+  next[questionId] = { questionId, isReq: 1, ordNo: 1, ...extra }
+  return next
+}
+
+export function reorderAttachments(map, fromId, toId) {
+  const rows = Object.values(map).sort((a, b) => Number(a.ordNo) - Number(b.ordNo))
+  const from = rows.findIndex((item) => String(item.questionId) === String(fromId))
+  const to = rows.findIndex((item) => String(item.questionId) === String(toId))
+  if (from < 0 || to < 0 || from === to) return map
+  const nextRows = [...rows]
+  const [moved] = nextRows.splice(from, 1)
+  nextRows.splice(to, 0, moved)
+  const next = {}
+  nextRows.forEach((item, index) => {
+    next[item.questionId] = { ...item, ordNo: index + 1 }
+  })
+  return next
+}
+
 export function displayName(profile) {
   return [profile?.firstName, profile?.lastName].filter(Boolean).join(' ').trim()
 }
@@ -62,6 +87,51 @@ export function useEscape(onClose) {
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [onClose])
+}
+
+export function ConfirmDialog({
+  title = 'Onay',
+  message,
+  confirmLabel = 'Evet',
+  cancelLabel = 'Hayır',
+  confirmClassName = 'bg-blue-600 text-white hover:bg-blue-700',
+  onConfirm,
+  onCancel,
+}) {
+  useEscape(onCancel)
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 p-4"
+      onClick={onCancel}
+    >
+      <div
+        className="w-full max-w-md overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="p-6">
+          <h2 className="text-lg font-bold text-slate-800">{title}</h2>
+          <p className="mt-2 text-sm text-slate-600">{message}</p>
+        </div>
+        <div className="flex items-center justify-end gap-3 border-t border-slate-200 bg-slate-50 p-4">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-lg bg-slate-200 px-5 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-300"
+          >
+            {cancelLabel}
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className={`rounded-lg px-5 py-2 text-sm font-semibold transition-colors ${confirmClassName}`}
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export function paginateRows(rows, page, size) {

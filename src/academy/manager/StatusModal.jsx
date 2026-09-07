@@ -18,7 +18,7 @@ export default function StatusModal({ application, statuses, saving, onClose, on
   const handleSubmit = (event) => {
     event.preventDefault()
     if (!stId || saving) return
-    onSave({ stId, statusDescr: statusDescr.trim() })
+    onSave({ stId: Number(stId), statusDescr: statusDescr.trim() })
   }
 
   return (

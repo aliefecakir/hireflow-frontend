@@ -21,7 +21,7 @@ export interface QuestionChoice {
 }
 
 export interface QuestionType {
-  id: string
+  id: number
   name: string
   shrtCode?: string | null
   entCodeName?: string | null
@@ -109,10 +109,11 @@ function kindFromText(value: unknown): QuestionKind | null {
     return 'date'
   }
   if (
-    /\b(mult|multi|ms|chk|css|checkbox)\b/.test(text)
-    || text.includes('cok sec')
+    /\b(mult|multi|multiple|ms|chk|css|checkbox)\b/.test(text)
     || text.includes('coktan')
+    || text.includes('coklu')
     || text.includes('birden fazla')
+    || (text.includes('cok') && (text.includes('sec') || text.includes('secenek') || text.includes('sik')))
   ) {
     return 'multi'
   }
@@ -127,7 +128,6 @@ function kindFromText(value: unknown): QuestionKind | null {
   if (
     /\b(sngl|single|radio|sc|tss)\b/.test(text)
     || text.includes('tek sec')
-    || text.includes('secmeli')
   ) {
     return 'single'
   }
@@ -169,8 +169,9 @@ export function normalizeQuestionTypes(rows: unknown): CatalogQuestionType[] {
   const result = (Array.isArray(rows) ? rows : [])
     .map((row) => {
       const item = (row || {}) as Record<string, unknown>
-      const id = String(item.id ?? item.gnlTpId ?? '')
-      if (!id) return null
+      const parsedId = Number(item.id ?? item.gnlTpId)
+      if (!Number.isFinite(parsedId)) return null
+      const id = parsedId
       const name = String(item.name ?? item.shrtCode ?? id)
       const shrtCode = item.shrtCode != null ? String(item.shrtCode) : null
       const entCodeName = item.entCodeName != null ? String(item.entCodeName) : null
@@ -195,7 +196,11 @@ export function getQuestionKind(
   if (!question) return 'single'
 
   const choicelessKind = kindFromChoicelessFallback(question)
-  const tpId = question.tpId ?? question.id
+  const isQuestionRow = question.questionText != null && String(question.questionText) !== ''
+  const tpId = question.tpId != null && String(question.tpId) !== ''
+    ? question.tpId
+    : (isQuestionRow ? undefined : question.id)
+
   if (catalog.length > 0 && tpId != null && String(tpId) !== '') {
     const match = catalog.find((item) => String(item.id) === String(tpId))
     const catalogKind = match?.kind || kindFromMeta(match)
@@ -226,4 +231,43 @@ export function getQuestionKind(
   }
 
   return 'single'
+}
+
+export function parseFormDate(value: unknown): Date | null {
+  if (!value) return null
+  const parsed = new Date(String(value))
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+export function isFormExpired(
+  form: { edate?: unknown } | null | undefined,
+  now = new Date(),
+): boolean {
+  const end = parseFormDate(form?.edate)
+  return Boolean(end && now.getTime() > end.getTime())
+}
+
+export function hasFormStarted(
+  form: { sdate?: unknown } | null | undefined,
+  now = new Date(),
+): boolean {
+  const start = parseFormDate(form?.sdate)
+  if (!start) return true
+  return now.getTime() >= start.getTime()
+}
+
+export function isFormVisibleToCandidates(
+  form: { isActv?: unknown; edate?: unknown } | null | undefined,
+  now = new Date(),
+): boolean {
+  if (!form) return false
+  if (form.isActv != null && !isFlagOn(form.isActv)) return false
+  return !isFormExpired(form, now)
+}
+
+export function canApplyToForm(
+  form: { isActv?: unknown; sdate?: unknown; edate?: unknown } | null | undefined,
+  now = new Date(),
+): boolean {
+  return isFormVisibleToCandidates(form, now) && hasFormStarted(form, now)
 }

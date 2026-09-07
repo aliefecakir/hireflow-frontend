@@ -9,10 +9,13 @@ import {
   getForms,
 } from '../api/forms'
 import {
+  canApplyToForm,
   filterCandidateQuestions,
   getChoiceId,
   getQuestionKind,
+  hasFormStarted,
   isFlagOn,
+  isFormVisibleToCandidates,
   normalizeQuestionTypes,
 } from '../api/helpers'
 import { getQuestionTypes } from '../api/questions'
@@ -89,6 +92,17 @@ const EMPTY_PROFILE = {
   departmentId: '',
 }
 
+function formatDate(value) {
+  if (!value) return '—'
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return '—'
+  return parsed.toLocaleDateString('tr-TR', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+}
+
 function LoadingState({ label = 'Yükleniyor...' }) {
   return (
     <div className="text-center">
@@ -132,6 +146,8 @@ export default function AcademyApply() {
   const navigate = useNavigate()
 
   const [formTitle, setFormTitle] = useState('')
+  const [currentForm, setCurrentForm] = useState(null)
+  const [applyState, setApplyState] = useState('open')
   const [questions, setQuestions] = useState([])
   const [questionTypes, setQuestionTypes] = useState([])
   const [universities, setUniversities] = useState([])
@@ -156,7 +172,7 @@ export default function AcademyApply() {
     const load = async () => {
       try {
         const [formQuestions, forms, universityRows, departmentRows, typeRows] = await Promise.all([
-          getFormQuestions(formId),
+          getFormQuestions(formId).catch(() => null),
           getForms().catch(() => []),
           fetchLookup('UNIVERSITY', ['UNIVERSITY_ID', 'universityId', 'id'], ['NAME', 'name']).catch(() => []),
           fetchLookup('DEPARTMENT', ['DEPARTMENT_ID', 'departmentId', 'id'], ['NAME', 'name']).catch(() => []),
@@ -165,8 +181,23 @@ export default function AcademyApply() {
 
         if (cancelled) return
 
-        const currentForm = (forms || []).find((form) => String(form.formId) === String(formId))
-        setFormTitle(currentForm?.title || 'Akademi Başvurusu')
+        const matchedForm = (forms || []).find((form) => String(form.formId) === String(formId))
+        setCurrentForm(matchedForm || null)
+        setFormTitle(matchedForm?.title || 'Akademi Başvurusu')
+
+        if (!matchedForm || !isFormVisibleToCandidates(matchedForm)) {
+          setApplyState('closed')
+          setQuestions([])
+          return
+        }
+
+        if (!hasFormStarted(matchedForm)) {
+          setApplyState('upcoming')
+          setQuestions([])
+          return
+        }
+
+        setApplyState('open')
         setQuestions(sortQuestions(filterCandidateQuestions(Array.isArray(formQuestions) ? formQuestions : [])))
         setQuestionTypes(Array.isArray(typeRows) ? typeRows : [])
         setUniversities(universityRows)
@@ -175,6 +206,7 @@ export default function AcademyApply() {
         console.error('Başvuru formu yüklenemedi:', error)
         if (!cancelled) {
           setQuestions([])
+          setApplyState('closed')
           showToast.error('Hata Oluştu', getErrorMessage(error) || 'Form soruları yüklenirken bir hata oluştu.')
         }
       } finally {
@@ -323,6 +355,13 @@ export default function AcademyApply() {
   const handleSubmit = async (event) => {
     event.preventDefault()
     if (submitting) return
+    if (!canApplyToForm(currentForm)) {
+      showToast.warning(
+        'Dikkat',
+        hasFormStarted(currentForm) ? 'Başvuru süresi sona erdi.' : 'Başvuru süreci henüz başlamadı.',
+      )
+      return
+    }
     if (questions.some((question) => answers[question.questionId]?.uploading)) {
       showToast.warning('Dikkat', 'CV yüklemesi bitene kadar bekleyin.')
       return
@@ -387,6 +426,34 @@ export default function AcademyApply() {
         {loading ? (
           <div className="py-24">
             <LoadingState />
+          </div>
+        ) : applyState !== 'open' ? (
+          <div className="rounded-2xl bg-white p-6 text-center shadow-md sm:p-8">
+            <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50">
+              <GraduationCap className="h-7 w-7 text-blue-600" />
+            </span>
+            <h1 className="mt-6 text-2xl font-bold text-slate-900">{formTitle}</h1>
+            {applyState === 'upcoming' ? (
+              <p className="mt-2 text-sm text-slate-500">
+                Başvurular {formatDate(currentForm?.sdate)} tarihinde başlayacak.
+                Bu tarihten önce forma başvurulamaz.
+              </p>
+            ) : (
+              <p className="mt-2 text-sm text-slate-500">
+                Bu ilan adaylara açık değil veya başvuru süresi sona erdi.
+              </p>
+            )}
+            {currentForm?.sdate || currentForm?.edate ? (
+              <p className="mt-3 text-sm font-medium text-slate-600">
+                {formatDate(currentForm?.sdate)} – {formatDate(currentForm?.edate)}
+              </p>
+            ) : null}
+            <Link
+              to="/academy"
+              className="mt-6 inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
+            >
+              İlanlara Dön
+            </Link>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-6">

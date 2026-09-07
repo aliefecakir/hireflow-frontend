@@ -10,21 +10,21 @@ export interface FormApplication {
   gradDate?: string | null
   totalScore?: number | null
   interviewScore?: number | null
-  stId?: string | null
+  stId?: number | null
   statusName?: string | null
   statusShrtCode?: string | null
   statusDescr?: string | null
 }
 
 export interface AcademyAppStatus {
-  stId: string
+  stId: number
   name: string
   descr?: string | null
   shrtCode?: string | null
 }
 
 export interface UpdateAcademyAppStatusPayload {
-  stId: string
+  stId: number
   statusDescr?: string | null
 }
 
@@ -42,10 +42,12 @@ export interface CandidateAnswer {
   selectedChoiceId?: number | null
   selectedChoiceIds?: number[] | null
   answerText?: string | null
-  tpId?: string | null
+  tpId?: number | null
   minScore?: number | null
   maxScore?: number | null
   score?: number | null
+  ordNo?: number | null
+  manuallyScored?: boolean | null
   isAssmt?: number | boolean | null
   choices?: CandidateAnswerChoice[]
 }
@@ -63,7 +65,7 @@ export interface InterviewCriterion {
   minScore?: number | null
   maxScore?: number | null
   ordNo?: number | null
-  tpId?: string | null
+  tpId?: number | null
   tpShrtCode?: string | null
   answerText?: string | null
   selectedChoiceId?: number | null
@@ -83,7 +85,7 @@ export interface ApplicationDetails {
   depScore?: number | null
   totalScore?: number | null
   interviewScore?: number | null
-  stId?: string | null
+  stId?: number | null
   statusName?: string | null
   statusDescr?: string | null
   answers: CandidateAnswer[]
@@ -100,6 +102,18 @@ export interface EvaluateApplicationPayload {
     questionId: number
     score: number
   }>
+}
+
+export interface ManualScorePayload {
+  questionId: number
+  score: number
+}
+
+export interface ManualScoreResult {
+  academyAppId: number
+  questionId: number
+  score: number
+  totalScore: number
 }
 
 export interface EvaluateApplicationResult {
@@ -122,7 +136,10 @@ export function updateAcademyAppStatus(
 ): Promise<FormApplication> {
   return academyRequest<FormApplication>(`/academy/applications/${appId}/status`, {
     method: 'PUT',
-    body: JSON.stringify(data),
+    body: JSON.stringify({
+      ...data,
+      stId: Number(data.stId),
+    }),
   })
 }
 
@@ -135,6 +152,16 @@ export function evaluateApplication(
   data: EvaluateApplicationPayload,
 ): Promise<EvaluateApplicationResult> {
   return academyRequest<EvaluateApplicationResult>(`/academy/applications/${appId}/evaluate`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+export function saveManualScore(
+  appId: number | string,
+  data: ManualScorePayload,
+): Promise<ManualScoreResult> {
+  return academyRequest<ManualScoreResult>(`/academy/applications/${appId}/manual-score`, {
     method: 'POST',
     body: JSON.stringify(data),
   })

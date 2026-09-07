@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, Building2, Calendar, GraduationCap } from 'lucide-react'
+import { ArrowLeft, Calendar, GraduationCap } from 'lucide-react'
 import { getForms } from '../api/forms'
-import { isFlagOn } from '../api/helpers'
+import { canApplyToForm, isFormVisibleToCandidates } from '../api/helpers'
 import { getErrorMessage } from '../../shared/api/client'
 import { showToast } from '../../shared/toast/ToastProvider'
 
@@ -37,7 +37,7 @@ export default function Academy() {
       try {
         const data = await getForms()
         if (!cancelled) {
-          setForms((Array.isArray(data) ? data : []).filter((form) => form.isActv == null || isFlagOn(form.isActv)))
+          setForms((Array.isArray(data) ? data : []).filter((form) => isFormVisibleToCandidates(form)))
         }
       } catch (error) {
         console.error('Akademi formları yüklenemedi:', error)
@@ -91,25 +91,25 @@ export default function Academy() {
                   <h2 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
                     {form.title}
                   </h2>
-                  <div className="mt-5 flex flex-wrap gap-2">
-                    {form.organizationName ? (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-50 px-3 py-1.5 text-xs font-medium text-violet-700">
-                        <Building2 className="h-3.5 w-3.5" />
-                        {form.organizationName}
-                      </span>
-                    ) : null}
+                  <div className="mt-5">
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-50 px-3 py-1.5 text-xs font-medium text-orange-600">
                       <Calendar className="h-3.5 w-3.5" />
                       {formatDate(form.sdate)} – {formatDate(form.edate)}
                     </span>
                   </div>
                   <div className="mt-6 flex justify-end">
-                    <Link
-                      to={`/academy/apply/${form.formId}`}
-                      className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
-                    >
-                      Hemen Başvur
-                    </Link>
+                    {canApplyToForm(form) ? (
+                      <Link
+                        to={`/academy/apply/${form.formId}`}
+                        className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
+                      >
+                        Hemen Başvur
+                      </Link>
+                    ) : (
+                      <span className="inline-flex items-center justify-center rounded-lg bg-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600">
+                        Başvuru süreci henüz başlamadı
+                      </span>
+                    )}
                   </div>
                 </div>
               </article>

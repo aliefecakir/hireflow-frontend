@@ -1,8 +1,43 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Plus, Trash2, X } from 'lucide-react'
 import { getChoiceId, getQuestionKind, isFlagOn, toFlag } from '../api/helpers'
 import { showToast } from '../../shared/toast/ToastProvider'
-import { createEmptyChoice, inputClass, useEscape } from './ui'
+import { ConfirmDialog, createEmptyChoice, inputClass, useEscape } from './ui'
+
+function snapshotQuestion({
+  questionText,
+  tpId,
+  isAssmt,
+  maxScore,
+  choices,
+  includeOther,
+  otherMaxScore,
+}) {
+  return JSON.stringify({
+    questionText: String(questionText || '').trim(),
+    tpId: String(tpId || ''),
+    isAssmt: Boolean(isAssmt),
+    maxScore: Number(maxScore) || 0,
+    includeOther: Boolean(includeOther),
+    otherMaxScore: Number(otherMaxScore) || 0,
+    choices: (choices || []).map((choice, index) => ({
+      id: choice.id ?? null,
+      choiceText: String(choice.choiceText || '').trim(),
+      score: Number(choice.score) || 0,
+      ordNo: index + 1,
+    })),
+  })
+}
+
+const EMPTY_QUESTION_SNAPSHOT = snapshotQuestion({
+  questionText: '',
+  tpId: '',
+  isAssmt: false,
+  maxScore: 10,
+  choices: [{ id: null, choiceText: '', score: 0 }, { id: null, choiceText: '', score: 0 }],
+  includeOther: false,
+  otherMaxScore: 10,
+})
 
 export default function QuestionModal({ 
   onClose, 
@@ -29,36 +64,87 @@ export default function QuestionModal({
   const [choices, setChoices] = useState([createEmptyChoice(1, 1), createEmptyChoice(2, 2)])
   const [includeOther, setIncludeOther] = useState(false)
   const [otherMaxScore, setOtherMaxScore] = useState(10)
-  useEscape(onClose)
+  const [confirmAction, setConfirmAction] = useState(null)
+  const baselineRef = useRef(EMPTY_QUESTION_SNAPSHOT)
+  const pendingPayloadRef = useRef(null)
+  const confirmActionRef = useRef(null)
+  confirmActionRef.current = confirmAction
+
+  const isDirty = snapshotQuestion({
+    questionText,
+    tpId,
+    isAssmt,
+    maxScore,
+    choices,
+    includeOther,
+    otherMaxScore,
+  }) !== baselineRef.current
+
+  const requestClose = () => {
+    if (confirmAction) return
+    if (!isDirty) {
+      onClose()
+      return
+    }
+    setConfirmAction('cancel')
+  }
+
+  useEscape(() => {
+    if (confirmActionRef.current) return
+    requestClose()
+  })
 
   // Düzenleme modunda mevcut değerleri yükle
   useEffect(() => {
     if (question) {
-      setQuestionText(question.questionText || '')
-      setTpId(String(question.tpId || ''))
-      setIsAssmt(isFlagOn(question.isAssmt))
-      setMaxScore(question.maxScore || 10)
-      
+      const nextText = question.questionText || ''
+      const nextTpId = String(question.tpId || '')
+      const nextIsAssmt = isFlagOn(question.isAssmt)
+      const nextMaxScore = question.maxScore || 10
+      let nextChoices = [createEmptyChoice(1, 1), createEmptyChoice(2, 2)]
+      let nextIncludeOther = false
+      let nextOtherMax = 10
+
       if (question.choices && question.choices.length > 0) {
-        const otherChoice = question.choices.find(c => isFlagOn(c.isOther))
-        const regularChoices = question.choices.filter(c => !isFlagOn(c.isOther))
-        
+        const otherChoice = question.choices.find((c) => isFlagOn(c.isOther))
+        const regularChoices = question.choices.filter((c) => !isFlagOn(c.isOther))
+
         if (regularChoices.length > 0) {
-          setChoices(regularChoices.map((c, idx) => ({
+          nextChoices = regularChoices.map((c, idx) => ({
             key: getChoiceId(c) || idx + 1,
             id: getChoiceId(c),
             choiceText: c.choiceText || '',
             score: c.score ?? 0,
-            ordNo: c.ordNo ?? idx + 1
-          })))
+            ordNo: c.ordNo ?? idx + 1,
+          }))
         }
-        
+
         if (otherChoice) {
-          setIncludeOther(true)
-          setOtherMaxScore(otherChoice.score ?? 10)
+          nextIncludeOther = true
+          nextOtherMax = otherChoice.score ?? 10
         }
       }
+
+      setQuestionText(nextText)
+      setTpId(nextTpId)
+      setIsAssmt(nextIsAssmt)
+      setMaxScore(nextMaxScore)
+      setChoices(nextChoices)
+      setIncludeOther(nextIncludeOther)
+      setOtherMaxScore(nextOtherMax)
+      baselineRef.current = snapshotQuestion({
+        questionText: nextText,
+        tpId: nextTpId,
+        isAssmt: nextIsAssmt,
+        maxScore: nextMaxScore,
+        choices: nextChoices,
+        includeOther: nextIncludeOther,
+        otherMaxScore: nextOtherMax,
+      })
+      return
     }
+
+    baselineRef.current = EMPTY_QUESTION_SNAPSHOT
   }, [question])
 
   const selectedType = questionTypes.find((item) => String(item.id) === String(tpId))
@@ -99,12 +185,10 @@ export default function QuestionModal({
     setChoices((prev) => prev.filter((choice) => choice.key !== key))
   }
 
-  const handleSubmit = (event) => {
-    event.preventDefault()
-    if (saving) return
+  const buildPayload = () => {
     if (!tpId || !kind) {
       showToast.warning('Dikkat', 'Soru tipi seçin.')
-      return
+      return null
     }
 
     const preparedChoices = isChoiceType
@@ -126,12 +210,12 @@ export default function QuestionModal({
       const parsedOtherMax = Number(otherMaxScore)
       if (!Number.isFinite(parsedOtherMax) || parsedOtherMax < 0) {
         showToast.warning('Dikkat', 'Diğer şıkkı için geçerli bir max puan girin.')
-        return
+        return null
       }
-      
+
       // Edit modunda mevcut "Diğer" şıkkının id'sini kullan
-      const existingOther = question?.choices?.find(c => isFlagOn(c.isOther))
-      
+      const existingOther = question?.choices?.find((c) => isFlagOn(c.isOther))
+
       preparedChoices.push({
         id: existingOther ? getChoiceId(existingOther) : undefined,
         choiceText: 'Diğer',
@@ -143,24 +227,37 @@ export default function QuestionModal({
 
     if (isChoiceType && preparedChoices.filter((choice) => !choice.isOther).length < 2) {
       showToast.warning('Dikkat', 'Tek seçmeli ve çok seçmeli sorular için en az iki şık girin.')
-      return
+      return null
     }
 
     const parsedMaxScore = Number(maxScore)
     if (isOpenType && (!Number.isFinite(parsedMaxScore) || parsedMaxScore < 0)) {
       showToast.warning('Dikkat', 'Açık uçlu soru için geçerli bir max puan girin.')
-      return
+      return null
     }
 
     const scores = preparedChoices.map((choice) => choice.score)
-    onSave({
+    return {
       questionText: canEditContent ? questionText.trim() : undefined,
-      tpId: canEditContent ? tpId : undefined,
+      tpId: canEditContent ? Number(tpId) : undefined,
       minScore: isChoiceType ? Math.min(0, ...scores) : 0,
       maxScore: isChoiceType ? Math.max(0, ...scores) : (isPlainAnswerType ? 0 : parsedMaxScore),
       isAssmt: canEditContent ? toFlag(isFileType ? false : isAssmt) : undefined,
       choices: preparedChoices,
-    })
+    }
+  }
+
+  const handleSubmit = (event) => {
+    event.preventDefault()
+    if (saving) return
+    const payload = buildPayload()
+    if (!payload) return
+    if (!isDirty) {
+      showToast.warning('Dikkat', 'Kaydedilecek bir değişiklik yok.')
+      return
+    }
+    pendingPayloadRef.current = payload
+    setConfirmAction('save')
   }
 
   const handleDelete = () => {
@@ -171,9 +268,10 @@ export default function QuestionModal({
   }
 
   return (
+    <>
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4"
-      onClick={onClose}
+      onClick={requestClose}
     >
       <div
         className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl"
@@ -189,7 +287,7 @@ export default function QuestionModal({
                 ? (canEditContent
                   ? 'Soru hiçbir formda ve cevapta kullanılmıyor, tüm alanları değiştirebilirsiniz.'
                   : 'Soru kullanımda. Yeni şık ekleyebilir ve puanları değiştirebilirsiniz; mevcut şık metinleri kilitlidir.')
-                : 'Tipi seçince şıklar, max puan, tarih veya CV yükleme alanı otomatik açılır.'
+                : 'Soru başlığı oluşturun, soru tipini seçin ve şıkları ekleyin.'
               }
             </p>
             {isEditMode && usage && (usage.formCount > 0 || usage.answerCount > 0) ? (
@@ -226,7 +324,7 @@ export default function QuestionModal({
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
             aria-label="Kapat"
           >
@@ -346,10 +444,12 @@ export default function QuestionModal({
                   </button>
                 </div>
 
-                <div className="mt-4 hidden grid-cols-[1fr_7rem_auto] gap-3 px-1 text-xs font-semibold uppercase tracking-wide text-slate-500 sm:grid">
-                  <span>Şık Metni</span>
-                  <span>Puan</span>
-                  <span className="sr-only">Sil</span>
+                <div className="mt-4 hidden grid-cols-[1fr_7rem_auto] items-center gap-3 text-xs font-semibold uppercase tracking-wide text-slate-500 sm:grid">
+                  <span className="text-left">Şık Metni</span>
+                  <span className="text-left">Puan</span>
+                  <span className="inline-flex p-2">
+                    <span className="sr-only">Sil</span>
+                    <span className="h-4 w-4" aria-hidden="true" />                  </span>
                 </div>
 
                 <div className="mt-2 space-y-3">
@@ -473,7 +573,7 @@ export default function QuestionModal({
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={onClose}
+                onClick={requestClose}
                 className="rounded-lg bg-slate-200 px-5 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-300"
               >
                 İptal
@@ -490,6 +590,39 @@ export default function QuestionModal({
         </form>
       </div>
     </div>
+    {confirmAction === 'cancel' ? (
+      <ConfirmDialog
+        title="İptal"
+        message="Yapılan değişiklikler iptal edilecektir. Emin misiniz?"
+        confirmLabel="Evet"
+        cancelLabel="Hayır"
+        confirmClassName="bg-red-600 text-white hover:bg-red-700"
+        onCancel={() => setConfirmAction(null)}
+        onConfirm={() => {
+          setConfirmAction(null)
+          onClose()
+        }}
+      />
+    ) : null}
+    {confirmAction === 'save' ? (
+      <ConfirmDialog
+        title="Kaydet"
+        message="Yapılan değişiklikleri kaydetmek istediğinizden emin misiniz?"
+        confirmLabel="Evet"
+        cancelLabel="Hayır"
+        onCancel={() => {
+          pendingPayloadRef.current = null
+          setConfirmAction(null)
+        }}
+        onConfirm={() => {
+          setConfirmAction(null)
+          const payload = pendingPayloadRef.current
+          pendingPayloadRef.current = null
+          if (payload) onSave(payload)
+        }}
+      />
+    ) : null}
+    </>
   )
 }
 

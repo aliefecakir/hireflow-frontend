@@ -1,17 +1,19 @@
-import { useEffect, useMemo, useState } from 'react'
-import { List, Plus } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { GripVertical, List, Plus } from 'lucide-react'
 import {
   DEFAULT_PAGE_SIZE,
   getQuestionId,
   getQuestionKind,
   isFlagOn,
+  isFormExpired,
   KIND_LABELS,
   toFlag,
 } from '../api/helpers'
-import { CompactCategoryFilter, inputClass, paginateRows, PurposeBadge, renumberAttachments, Switch, TablePager, toDateInput, TypeBadge } from './ui'
+import { CompactCategoryFilter, ConfirmDialog, inputClass, paginateRows, prependAttachment, PurposeBadge, renumberAttachments, reorderAttachments, Switch, TablePager, toDateInput, TypeBadge } from './ui'
 import OrganizationModal from './OrganizationModal'
 import OrganizationDetailsModal from './OrganizationDetailsModal'
 import QuestionModal from './QuestionModal'
+import { showToast } from '../../shared/toast/ToastProvider'
 
 const EMPTY_FORM = {
   title: '',
@@ -19,6 +21,24 @@ const EMPTY_FORM = {
   organizationId: '',
   sdate: '',
   edate: '',
+}
+
+function snapshotForm(formData, attachments, isActv) {
+  return JSON.stringify({
+    title: String(formData.title || '').trim(),
+    descr: String(formData.descr || '').trim(),
+    organizationId: String(formData.organizationId || ''),
+    sdate: formData.sdate || '',
+    edate: formData.edate || '',
+    isActv: isActv ? 1 : 0,
+    questions: Object.values(attachments)
+      .sort((a, b) => Number(a.ordNo) - Number(b.ordNo))
+      .map((item) => ({
+        questionId: Number(item.questionId),
+        ordNo: Number(item.ordNo),
+        isReq: toFlag(item.isReq),
+      })),
+  })
 }
 
 export default function CreateFormView({
@@ -50,25 +70,31 @@ export default function CreateFormView({
   const [showOrgModal, setShowOrgModal] = useState(false)
   const [showOrgDetails, setShowOrgDetails] = useState(false)
   const [showQuestionModal, setShowQuestionModal] = useState(false)
+  const [dragQuestionId, setDragQuestionId] = useState(null)
+  const [confirmAction, setConfirmAction] = useState(null)
+  const baselineRef = useRef(snapshotForm(EMPTY_FORM, {}, true))
   const selectedOrganizationId = formData.organizationId || organizations[0]?.id || ''
   const isEditing = Boolean(editingForm?.formId)
+  const isDirty = snapshotForm(formData, attachments, isActv) !== baselineRef.current
 
   useEffect(() => {
     if (!editingForm) {
       setFormData(EMPTY_FORM)
       setAttachments({})
       setIsActv(true)
+      baselineRef.current = snapshotForm(EMPTY_FORM, {}, true)
       return
     }
 
-    setFormData({
+    const nextForm = {
       title: editingForm.title || '',
       descr: editingForm.descr || '',
       organizationId: editingForm.organizationId || '',
       sdate: toDateInput(editingForm.sdate),
       edate: toDateInput(editingForm.edate),
-    })
-    setIsActv(editingForm.isActv == null ? true : isFlagOn(editingForm.isActv))
+    }
+    const nextActvRaw = editingForm.isActv == null ? true : isFlagOn(editingForm.isActv)
+    const nextActv = isFormExpired({ edate: editingForm.edate || nextForm.edate }) ? false : nextActvRaw
     const next = {}
     for (const question of editingForm.questions || []) {
       const questionId = getQuestionId(question)
@@ -79,8 +105,22 @@ export default function CreateFormView({
         ordNo: Number(question.ordNo) || Object.keys(next).length + 1,
       }
     }
-    setAttachments(renumberAttachments(next))
+    const nextAttachments = renumberAttachments(next)
+    setFormData(nextForm)
+    setIsActv(nextActv)
+    setAttachments(nextAttachments)
+    baselineRef.current = snapshotForm(nextForm, nextAttachments, nextActv)
   }, [editingForm])
+
+  const endDatePassed = isFormExpired({
+    edate: formData.edate ? `${formData.edate}T23:59:59` : null,
+  })
+
+  useEffect(() => {
+    if (endDatePassed && isActv) {
+      setIsActv(false)
+    }
+  }, [endDatePassed, isActv])
 
   useEffect(() => {
     if (!formData.organizationId) return
@@ -91,19 +131,26 @@ export default function CreateFormView({
   }, [organizations, formData.organizationId])
 
   const filteredQuestions = useMemo(() => {
-    let rows = [...(questions || [])].sort((a, b) => {
-      const aAssmt = isFlagOn(a.isAssmt) ? 1 : 0
-      const bAssmt = isFlagOn(b.isAssmt) ? 1 : 0
-      if (aAssmt !== bAssmt) return aAssmt - bAssmt
-      return (Number(getQuestionId(a)) || 0) - (Number(getQuestionId(b)) || 0)
-    })
+    let rows = [...(questions || [])]
     if (purposeFilter === 'candidate') rows = rows.filter((question) => !isFlagOn(question.isAssmt))
     if (purposeFilter === 'interview') rows = rows.filter((question) => isFlagOn(question.isAssmt))
     if (typeFilter !== 'all') {
       rows = rows.filter((question) => getQuestionKind(question, questionTypes) === typeFilter)
     }
-    return rows
-  }, [purposeFilter, typeFilter, questions, questionTypes])
+    return rows.sort((a, b) => {
+      const aId = getQuestionId(a)
+      const bId = getQuestionId(b)
+      const aAttached = attachments[aId]
+      const bAttached = attachments[bId]
+      if (aAttached && bAttached) return Number(aAttached.ordNo) - Number(bAttached.ordNo)
+      if (aAttached) return -1
+      if (bAttached) return 1
+      const aAssmt = isFlagOn(a.isAssmt) ? 1 : 0
+      const bAssmt = isFlagOn(b.isAssmt) ? 1 : 0
+      if (aAssmt !== bAssmt) return aAssmt - bAssmt
+      return (Number(aId) || 0) - (Number(bId) || 0)
+    })
+  }, [purposeFilter, typeFilter, questions, questionTypes, attachments])
 
   const pagedQuestions = paginateRows(filteredQuestions, questionPage, questionPageSize)
 
@@ -116,17 +163,8 @@ export default function CreateFormView({
   }
 
   const attachQuestion = (questionId) => {
-    setAttachments((prev) => {
-      if (prev[questionId]) return prev
-      return {
-        ...prev,
-        [questionId]: {
-          questionId,
-          isReq: 1,
-          ordNo: Object.keys(prev).length + 1,
-        },
-      }
-    })
+    setAttachments((prev) => prependAttachment(prev, questionId))
+    setQuestionPage(1)
   }
 
   const toggleQuestion = (questionId) => {
@@ -136,32 +174,44 @@ export default function CreateFormView({
         delete next[questionId]
         return renumberAttachments(next)
       }
-      return {
-        ...prev,
-        [questionId]: {
-          questionId,
-          isReq: 1,
-          ordNo: Object.keys(prev).length + 1,
-        },
-      }
+      return prependAttachment(prev, questionId)
     })
+    setQuestionPage(1)
+  }
+
+  const moveAttachedQuestion = (fromId, toId) => {
+    setAttachments((prev) => reorderAttachments(prev, fromId, toId))
+  }
+
+  const buildSavePayload = () => ({
+    ...formData,
+    formId: editingForm?.formId,
+    organizationId: Number(selectedOrganizationId),
+    isActv: toFlag(isActv),
+    questions: Object.values(attachments)
+      .sort((a, b) => Number(a.ordNo) - Number(b.ordNo))
+      .map((item, index) => ({
+        questionId: item.questionId,
+        ordNo: index + 1,
+        isReq: toFlag(item.isReq),
+      })),
+  })
+
+  const handleCancel = () => {
+    if (!isDirty) {
+      onCancel?.()
+      return
+    }
+    setConfirmAction('cancel')
   }
 
   const handleSubmit = (event) => {
     event.preventDefault()
-    onSave({
-      ...formData,
-      formId: editingForm?.formId,
-      organizationId: Number(selectedOrganizationId),
-      isActv: toFlag(isActv),
-      questions: Object.values(attachments)
-        .sort((a, b) => Number(a.ordNo) - Number(b.ordNo))
-        .map((item, index) => ({
-          questionId: item.questionId,
-          ordNo: index + 1,
-          isReq: toFlag(item.isReq),
-        })),
-    })
+    if (!isDirty) {
+      showToast.warning('Dikkat', 'Kaydedilecek bir değişiklik yok.')
+      return
+    }
+    setConfirmAction('save')
   }
 
   return (
@@ -268,8 +318,14 @@ export default function CreateFormView({
               <Switch
                 checked={isActv}
                 onChange={setIsActv}
+                disabled={endDatePassed}
                 label={isActv ? 'Form aktif' : 'Form pasif'}
               />
+              {endDatePassed ? (
+                <p className="mt-2 text-xs text-slate-500">
+                  Bitiş tarihi geçen formlar otomatik olarak pasife alınır ve aday listesinde görünmez.
+                </p>
+              ) : null}
             </div>
           </div>
         </div>
@@ -279,7 +335,7 @@ export default function CreateFormView({
             <div>
               <h2 className="text-lg font-semibold text-slate-800">Forma Eklenecek Sorular</h2>
               <p className="mt-1 text-sm text-slate-500">
-                Aday soruları başvuru formunda, mülakat kriterleri yalnızca değerlendirme ekranında görünür.
+                Aday soruları başvuru formunda, mülakat kriterleri yalnızca değerlendirme ekranında görünür. Eklenen sorular listenin üstünde durur; sürükleyerek sırasını değiştirebilirsiniz.
               </p>
             </div>
             <button
@@ -332,6 +388,7 @@ export default function CreateFormView({
             <table className="min-w-full text-sm">
               <thead className="border-b border-slate-200 bg-slate-50">
                 <tr>
+                  <th className="w-8 px-2 py-3" aria-label="Sırala" />
                   <th className="px-4 py-3 text-left font-semibold text-slate-700">Seç</th>
                   <th className="px-4 py-3 text-left font-semibold text-slate-700">Soru</th>
                   <th className="px-4 py-3 text-left font-semibold text-slate-700">Tip</th>
@@ -343,7 +400,7 @@ export default function CreateFormView({
               <tbody className="divide-y divide-slate-100">
                 {pagedQuestions.total === 0 ? (
                   <tr>
-                    <td colSpan="6" className="px-4 py-6 text-center text-slate-500">
+                    <td colSpan="7" className="px-4 py-6 text-center text-slate-500">
                       {(questions || []).length === 0
                         ? 'Soru havuzu boş. Yeni soru oluşturabilirsiniz.'
                         : 'Bu filtreye uygun soru yok.'}
@@ -354,11 +411,45 @@ export default function CreateFormView({
                     const questionId = getQuestionId(question)
                     const attached = attachments[questionId]
                     const kind = getQuestionKind(question, questionTypes)
+                    const isDragging = String(dragQuestionId) === String(questionId)
                     return (
                       <tr
                         key={questionId}
-                        className={attached ? 'bg-blue-50/70' : 'hover:bg-slate-50'}
+                        onDragOver={(event) => {
+                          if (!attached || !dragQuestionId) return
+                          event.preventDefault()
+                          event.dataTransfer.dropEffect = 'move'
+                        }}
+                        onDrop={(event) => {
+                          event.preventDefault()
+                          if (!attached || !dragQuestionId) return
+                          moveAttachedQuestion(dragQuestionId, questionId)
+                          setDragQuestionId(null)
+                        }}
+                        className={`${attached ? 'bg-blue-50/70' : 'hover:bg-slate-50'} ${
+                          isDragging ? 'opacity-50' : ''
+                        }`}
                       >
+                        <td className="px-2 py-3 text-slate-400">
+                          {attached ? (
+                            <button
+                              type="button"
+                              draggable
+                              onDragStart={(event) => {
+                                setDragQuestionId(questionId)
+                                event.dataTransfer.effectAllowed = 'move'
+                                event.dataTransfer.setData('text/plain', String(questionId))
+                              }}
+                              onDragEnd={() => setDragQuestionId(null)}
+                              className="cursor-grab rounded p-0.5 text-slate-400 hover:bg-slate-200 hover:text-slate-600 active:cursor-grabbing"
+                              aria-label="Sırayı değiştir"
+                            >
+                              <GripVertical className="h-4 w-4" />
+                            </button>
+                          ) : (
+                            <span className="inline-block w-5" />
+                          )}
+                        </td>
                         <td className="px-4 py-3">
                           <input
                             type="checkbox"
@@ -378,19 +469,18 @@ export default function CreateFormView({
                           <Switch
                             checked={isFlagOn(attached?.isReq)}
                             onChange={(value) => {
-                              setAttachments((prev) => {
-                                const current = prev[questionId] || {
-                                  questionId,
-                                  ordNo: Object.keys(prev).length + 1,
-                                }
-                                return {
+                              if (attached) {
+                                setAttachments((prev) => ({
                                   ...prev,
                                   [questionId]: {
-                                    ...current,
+                                    ...prev[questionId],
                                     isReq: toFlag(value),
                                   },
-                                }
-                              })
+                                }))
+                                return
+                              }
+                              setAttachments((prev) => prependAttachment(prev, questionId, { isReq: toFlag(value) }))
+                              setQuestionPage(1)
                             }}
                           />
                         </td>
@@ -422,16 +512,14 @@ export default function CreateFormView({
         </div>
 
         <div className="flex justify-end gap-3">
-          {isEditing ? (
-            <button
-              type="button"
-              onClick={onCancel}
-              disabled={savingForm}
-              className="rounded-lg bg-slate-200 px-5 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-300 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              İptal
-            </button>
-          ) : null}
+          <button
+            type="button"
+            onClick={handleCancel}
+            disabled={savingForm}
+            className="rounded-lg bg-slate-200 px-5 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-300 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            İptal
+          </button>
           <button
             type="submit"
             disabled={savingForm}
@@ -481,6 +569,35 @@ export default function CreateFormView({
           }}
         />
       )}
+
+      {confirmAction === 'cancel' ? (
+        <ConfirmDialog
+          title="İptal"
+          message="Yapılan değişiklikler iptal edilecektir. Emin misiniz?"
+          confirmLabel="Evet"
+          cancelLabel="Hayır"
+          confirmClassName="bg-red-600 text-white hover:bg-red-700"
+          onCancel={() => setConfirmAction(null)}
+          onConfirm={() => {
+            setConfirmAction(null)
+            onCancel?.()
+          }}
+        />
+      ) : null}
+
+      {confirmAction === 'save' ? (
+        <ConfirmDialog
+          title="Kaydet"
+          message="Yapılan değişiklikleri kaydetmek istediğinizden emin misiniz?"
+          confirmLabel="Evet"
+          cancelLabel="Hayır"
+          onCancel={() => setConfirmAction(null)}
+          onConfirm={() => {
+            setConfirmAction(null)
+            onSave(buildSavePayload())
+          }}
+        />
+      ) : null}
     </div>
   )
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Users } from 'lucide-react'
+import { ArrowLeft, Eye, Pencil, Users } from 'lucide-react'
 import {
   getAcademyAppStatuses,
   getFormApplications,
@@ -32,7 +32,7 @@ export default function ApplicationListPage() {
   const [loading, setLoading] = useState(true)
   const [statusApp, setStatusApp] = useState(null)
   const [savingStatus, setSavingStatus] = useState(false)
-  const [evaluatingAppId, setEvaluatingAppId] = useState(null)
+  const [evaluation, setEvaluation] = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
@@ -133,7 +133,7 @@ export default function ApplicationListPage() {
                     <th className="px-5 py-3 text-left font-semibold text-slate-700">Toplam Puan</th>
                     <th className="px-5 py-3 text-left font-semibold text-slate-700">Mülakat Puanı</th>
                     <th className="px-5 py-3 text-left font-semibold text-slate-700">Durum</th>
-                    <th className="px-5 py-3 text-right font-semibold text-slate-700">Aksiyon</th>
+                    <th className="px-5 py-3 text-right font-semibold text-slate-700" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -170,13 +170,24 @@ export default function ApplicationListPage() {
                           </button>
                         </td>
                         <td className="px-5 py-4 text-right">
-                          <button
-                            type="button"
-                            onClick={() => setEvaluatingAppId(row.academyAppId)}
-                            className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-orange-600"
-                          >
-                            Değerlendir
-                          </button>
+                          <div className="inline-flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setEvaluation({ appId: row.academyAppId, readOnly: true })}
+                              className="inline-flex items-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-300"
+                            >
+                              <Eye className="h-4 w-4" />
+                              Görüntüle
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEvaluation({ appId: row.academyAppId, readOnly: false })}
+                              className="inline-flex items-center gap-2 rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-orange-600"
+                            >
+                              <Pencil className="h-4 w-4" />
+                              Değerlendir
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     )
@@ -210,12 +221,13 @@ export default function ApplicationListPage() {
         />
       ) : null}
 
-      {evaluatingAppId ? (
+      {evaluation ? (
         <EvaluationModal
-          key={evaluatingAppId}
-          appId={evaluatingAppId}
+          key={`${evaluation.appId}-${evaluation.readOnly ? 'view' : 'edit'}`}
+          appId={evaluation.appId}
+          readOnly={evaluation.readOnly}
           statuses={statuses}
-          onClose={() => setEvaluatingAppId(null)}
+          onClose={() => setEvaluation(null)}
           onSaved={() => setRefreshKey((value) => value + 1)}
         />
       ) : null}
