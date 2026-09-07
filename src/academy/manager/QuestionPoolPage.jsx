@@ -12,27 +12,28 @@ export default function QuestionPoolPage() {
   const [loading, setLoading] = useState(true)
   const [savingQuestion, setSavingQuestion] = useState(false)
 
+  const loadQuestions = async () => {
+    try {
+      const [questionRows, typeRows] = await Promise.all([
+        getQuestions(),
+        getQuestionTypes().then(normalizeQuestionTypes).catch(() => []),
+      ])
+      setQuestions(Array.isArray(questionRows) ? questionRows : [])
+      setQuestionTypes(Array.isArray(typeRows) ? typeRows : [])
+    } catch (error) {
+      console.error('Soru havuzu yüklenemedi:', error)
+      setQuestions([])
+      showToast.error('Hata Oluştu', getErrorMessage(error) || 'Soru havuzu yüklenirken bir hata oluştu.')
+    }
+  }
+
   useEffect(() => {
     let cancelled = false
 
     const load = async () => {
-      try {
-        const [questionRows, typeRows] = await Promise.all([
-          getQuestions(),
-          getQuestionTypes().then(normalizeQuestionTypes).catch(() => []),
-        ])
-        if (cancelled) return
-        setQuestions(Array.isArray(questionRows) ? questionRows : [])
-        setQuestionTypes(Array.isArray(typeRows) ? typeRows : [])
-      } catch (error) {
-        console.error('Soru havuzu yüklenemedi:', error)
-        if (!cancelled) {
-          setQuestions([])
-          showToast.error('Hata Oluştu', getErrorMessage(error) || 'Soru havuzu yüklenirken bir hata oluştu.')
-        }
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
+      setLoading(true)
+      await loadQuestions()
+      if (!cancelled) setLoading(false)
     }
 
     load()
@@ -72,6 +73,7 @@ export default function QuestionPoolPage() {
       questions={questions}
       questionTypes={questionTypes}
       onAddQuestion={handleAddQuestion}
+      onRefresh={loadQuestions}
       savingQuestion={savingQuestion}
     />
   )

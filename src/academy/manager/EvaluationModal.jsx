@@ -48,11 +48,54 @@ function isOpenEndedCandidateAnswer(answer) {
     && !isDateAnswerValue(answer?.answerText)
 }
 
+function getSelectedOtherChoice(answer) {
+  const selectedIds = new Set(getSelectedChoiceIds(answer).map(String))
+  return (answer?.choices || []).find((choice) => (
+    isFlagOn(choice.isOther) && selectedIds.has(String(getChoiceId(choice) ?? ''))
+  )) || null
+}
+
+function needsManualScore(answer) {
+  return isOpenEndedCandidateAnswer(answer) || Boolean(getSelectedOtherChoice(answer))
+}
+
+function getManualScoreMax(answer) {
+  const otherChoice = getSelectedOtherChoice(answer)
+  if (otherChoice) {
+    const max = Number(otherChoice.score)
+    return Number.isFinite(max) && max >= 0 ? max : 10
+  }
+  const max = Number(answer?.maxScore)
+  return Number.isFinite(max) && max >= 0 ? max : 10
+}
+
 function readAnswerScore(answer) {
   const raw = answer?.score
   if (raw == null || raw === '') return null
   const value = Number(raw)
   return Number.isFinite(value) ? value : null
+}
+
+function ManualScoreField({ maxScore, value, onChange }) {
+  return (
+    <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 p-3">
+      <label className="block text-xs font-semibold text-blue-800">
+        Yönetici Puanı (0 - {maxScore})
+        <input
+          type="number"
+          min="0"
+          max={maxScore}
+          value={value}
+          onChange={(event) => {
+            const next = Math.max(0, Math.min(Number(event.target.value) || 0, maxScore))
+            onChange(next)
+          }}
+          className={`mt-2 w-32 ${inputClass}`}
+          placeholder="0"
+        />
+      </label>
+    </div>
+  )
 }
 
 export default function EvaluationModal({ appId, onClose, onSaved, statuses: statusesProp = [] }) {
@@ -61,7 +104,7 @@ export default function EvaluationModal({ appId, onClose, onSaved, statuses: sta
   const [saving, setSaving] = useState(false)
   const [scores, setScores] = useState({})
   const [texts, setTexts] = useState({})
-  const [manualScores, setManualScores] = useState({}) // Açık uçlu sorular için manuel puanlar
+  const [manualScores, setManualScores] = useState({}) // Açık uçlu ve “Diğer” cevapları için manuel puanlar
   const [statuses, setStatuses] = useState(Array.isArray(statusesProp) ? statusesProp : [])
   const [questionTypes, setQuestionTypes] = useState([])
   const [stId, setStId] = useState('')
@@ -106,7 +149,7 @@ export default function EvaluationModal({ appId, onClose, onSaved, statuses: sta
             }
           }
           for (const answer of filterCandidateQuestions(data?.answers || [])) {
-            if (!isOpenEndedCandidateAnswer(answer)) continue
+            if (!needsManualScore(answer)) continue
             const savedScore = readAnswerScore(answer)
             if (savedScore != null) {
               nextManualScores[answer.questionId] = savedScore
@@ -159,23 +202,21 @@ export default function EvaluationModal({ appId, onClose, onSaved, statuses: sta
       }
     }
 
-    // Bölüm 1'deki açık uçlu sorular için manuel puanları ekle
     const candidateAnswers = filterCandidateQuestions(details?.answers || [])
     const manualScoreUpdates = []
     for (const answer of candidateAnswers) {
-      if (isOpenEndedCandidateAnswer(answer) && manualScores[answer.questionId] != null) {
-        manualScoreUpdates.push({
-          questionId: answer.questionId,
-          score: Number(manualScores[answer.questionId])
-        })
-      }
+      if (!needsManualScore(answer)) continue
+      manualScoreUpdates.push({
+        questionId: answer.questionId,
+        score: Number(manualScores[answer.questionId] ?? 0),
+      })
     }
 
     setSaving(true)
     try {
-      await evaluateApplication(appId, { 
+      await evaluateApplication(appId, {
         answers: payload,
-        manualScores: manualScoreUpdates // Açık uçlu soruların manuel puanlarını gönder
+        manualScores: manualScoreUpdates,
       })
       if (stId) {
         await updateAcademyAppStatus(appId, { stId, statusDescr: statusDescr.trim() })
@@ -323,6 +364,14 @@ export default function EvaluationModal({ appId, onClose, onSaved, statuses: sta
                         ? String(answer.answerText || '').trim()
                         : ''
                       const isOpenEnded = isOpenEndedCandidateAnswer(answer)
+                      const selectedOtherChoice = getSelectedOtherChoice(answer)
+                      const manualMax = getManualScoreMax(answer)
+                      const setManualScore = (value) => {
+                        setManualScores((prev) => ({
+                          ...prev,
+                          [answer.questionId]: value,
+                        }))
+                      }
 
                       return (
                         <div key={answer.questionId} className="rounded-xl border border-slate-200 bg-white p-4">
@@ -352,71 +401,65 @@ export default function EvaluationModal({ appId, onClose, onSaved, statuses: sta
                                 value={answer.answerText || ''}
                                 className={`mt-3 resize-none bg-slate-50 ${inputClass}`}
                               />
-                              {/* Açık Uçlu Soru İçin Manuel Puan Input */}
-                              <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 p-3">
-                                <label className="block text-xs font-semibold text-blue-800">
-                                  Yönetici Puanı (0 - {answer.maxScore || 10})
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    max={answer.maxScore || 10}
-                                    value={manualScores[answer.questionId] ?? 0}
-                                    onChange={(e) => {
-                                      const value = Math.max(0, Math.min(Number(e.target.value) || 0, answer.maxScore || 10))
-                                      setManualScores(prev => ({
-                                        ...prev,
-                                        [answer.questionId]: value
-                                      }))
-                                    }}
-                                    className={`mt-2 w-32 ${inputClass}`}
-                                    placeholder="0"
-                                  />
-                                </label>
-                              </div>
+                              <ManualScoreField
+                                maxScore={manualMax}
+                                value={manualScores[answer.questionId] ?? 0}
+                                onChange={setManualScore}
+                              />
                             </>
                           ) : (
-                            <div className="mt-3 flex flex-col gap-2">
-                              {choices.map((choice) => {
-                                const choiceId = getChoiceId(choice)
-                                const checked = selectedIds.includes(String(choiceId))
-                                const showOtherText = checked && isFlagOn(choice.isOther) && Boolean(answer.answerText)
+                            <>
+                              <div className="mt-3 flex flex-col gap-2">
+                                {choices.map((choice) => {
+                                  const choiceId = getChoiceId(choice)
+                                  const checked = selectedIds.includes(String(choiceId))
+                                  const isOtherChoice = isFlagOn(choice.isOther)
+                                  const showOtherText = checked && isOtherChoice
 
-                                return (
-                                  <label
-                                    key={choiceId}
-                                    className={`flex items-start gap-3 rounded-xl border px-4 py-3 text-sm ${
-                                      checked
-                                        ? 'border-blue-300 bg-blue-50 text-blue-800'
-                                        : 'border-slate-200 bg-slate-50 text-slate-600'
-                                    }`}
-                                  >
-                                    <input
-                                      type={isMulti ? 'checkbox' : 'radio'}
-                                      name={`candidate-answer-${answer.questionId}`}
-                                      checked={checked}
-                                      disabled
-                                      readOnly
-                                      className="mt-0.5 h-4 w-4 border-slate-300 text-blue-600 disabled:opacity-100"
-                                    />
-                                    <span className="min-w-0 flex-1">
-                                      <span className="font-medium">
-                                        {choice.choiceText}
-                                        {choice.score != null ? (
-                                          <span className="ml-2 text-xs font-semibold text-blue-600">
-                                            (+{choice.score} Puan)
+                                  return (
+                                    <label
+                                      key={choiceId}
+                                      className={`flex items-start gap-3 rounded-xl border px-4 py-3 text-sm ${
+                                        checked
+                                          ? 'border-blue-300 bg-blue-50 text-blue-800'
+                                          : 'border-slate-200 bg-slate-50 text-slate-600'
+                                      }`}
+                                    >
+                                      <input
+                                        type={isMulti ? 'checkbox' : 'radio'}
+                                        name={`candidate-answer-${answer.questionId}`}
+                                        checked={checked}
+                                        disabled
+                                        readOnly
+                                        className="mt-0.5 h-4 w-4 border-slate-300 text-blue-600 disabled:opacity-100"
+                                      />
+                                      <span className="min-w-0 flex-1">
+                                        <span className="font-medium">
+                                          {choice.choiceText}
+                                          {choice.score != null ? (
+                                            <span className="ml-2 text-xs font-semibold text-blue-600">
+                                              {isOtherChoice ? `(Max ${choice.score} Puan)` : `(+${choice.score} Puan)`}
+                                            </span>
+                                          ) : null}
+                                        </span>
+                                        {showOtherText ? (
+                                          <span className="mt-2 block rounded-lg bg-white px-3 py-2 text-slate-600">
+                                            {answer.answerText || '—'}
                                           </span>
                                         ) : null}
                                       </span>
-                                      {showOtherText ? (
-                                        <span className="mt-2 block rounded-lg bg-white px-3 py-2 text-slate-600">
-                                          {answer.answerText}
-                                        </span>
-                                      ) : null}
-                                    </span>
-                                  </label>
-                                )
-                              })}
-                            </div>
+                                    </label>
+                                  )
+                                })}
+                              </div>
+                              {selectedOtherChoice ? (
+                                <ManualScoreField
+                                  maxScore={manualMax}
+                                  value={manualScores[answer.questionId] ?? 0}
+                                  onChange={setManualScore}
+                                />
+                              ) : null}
+                            </>
                           )}
                         </div>
                       )

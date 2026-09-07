@@ -5,9 +5,10 @@ import {
   getQuestionId,
   getQuestionKind,
   isFlagOn,
+  KIND_LABELS,
   toFlag,
 } from '../api/helpers'
-import { inputClass, paginateRows, PurposeBadge, renumberAttachments, Switch, TablePager, toDateInput, TypeBadge } from './ui'
+import { CompactCategoryFilter, inputClass, paginateRows, PurposeBadge, renumberAttachments, Switch, TablePager, toDateInput, TypeBadge } from './ui'
 import OrganizationModal from './OrganizationModal'
 import OrganizationDetailsModal from './OrganizationDetailsModal'
 import QuestionModal from './QuestionModal'
@@ -42,6 +43,8 @@ export default function CreateFormView({
   const [attachments, setAttachments] = useState({})
   const [isActv, setIsActv] = useState(true)
   const [purposeFilter, setPurposeFilter] = useState('all')
+  const [typeFilter, setTypeFilter] = useState('all')
+  const [activeFilter, setActiveFilter] = useState('purpose')
   const [questionPage, setQuestionPage] = useState(1)
   const [questionPageSize, setQuestionPageSize] = useState(DEFAULT_PAGE_SIZE)
   const [showOrgModal, setShowOrgModal] = useState(false)
@@ -88,16 +91,19 @@ export default function CreateFormView({
   }, [organizations, formData.organizationId])
 
   const filteredQuestions = useMemo(() => {
-    const rows = [...(questions || [])].sort((a, b) => {
+    let rows = [...(questions || [])].sort((a, b) => {
       const aAssmt = isFlagOn(a.isAssmt) ? 1 : 0
       const bAssmt = isFlagOn(b.isAssmt) ? 1 : 0
       if (aAssmt !== bAssmt) return aAssmt - bAssmt
       return (Number(getQuestionId(a)) || 0) - (Number(getQuestionId(b)) || 0)
     })
-    if (purposeFilter === 'candidate') return rows.filter((question) => !isFlagOn(question.isAssmt))
-    if (purposeFilter === 'interview') return rows.filter((question) => isFlagOn(question.isAssmt))
+    if (purposeFilter === 'candidate') rows = rows.filter((question) => !isFlagOn(question.isAssmt))
+    if (purposeFilter === 'interview') rows = rows.filter((question) => isFlagOn(question.isAssmt))
+    if (typeFilter !== 'all') {
+      rows = rows.filter((question) => getQuestionKind(question, questionTypes) === typeFilter)
+    }
     return rows
-  }, [purposeFilter, questions])
+  }, [purposeFilter, typeFilter, questions, questionTypes])
 
   const pagedQuestions = paginateRows(filteredQuestions, questionPage, questionPageSize)
 
@@ -286,28 +292,40 @@ export default function CreateFormView({
             </button>
           </div>
 
-          <div className="mt-4 flex flex-wrap gap-2">
-            {[
-              { id: 'all', label: 'Tümü' },
-              { id: 'candidate', label: 'Aday Soruları' },
-              { id: 'interview', label: 'Mülakat Kriterleri' },
-            ].map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => {
-                  setPurposeFilter(item.id)
-                  setQuestionPage(1)
-                }}
-                className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-                  purposeFilter === item.id
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
+          <div className="mt-4">
+            <CompactCategoryFilter
+              activeId={activeFilter}
+              onActiveChange={setActiveFilter}
+              groups={[
+                {
+                  id: 'purpose',
+                  label: 'Amaç',
+                  items: [
+                    { id: 'all', label: 'Tümü' },
+                    { id: 'candidate', label: 'Aday Soruları' },
+                    { id: 'interview', label: 'Mülakat Kriterleri' },
+                  ],
+                  value: purposeFilter,
+                  onChange: (id) => {
+                    setPurposeFilter(id)
+                    setQuestionPage(1)
+                  },
+                },
+                {
+                  id: 'type',
+                  label: 'Soru tipi',
+                  items: [
+                    { id: 'all', label: 'Tümü' },
+                    ...Object.entries(KIND_LABELS).map(([id, label]) => ({ id, label })),
+                  ],
+                  value: typeFilter,
+                  onChange: (id) => {
+                    setTypeFilter(id)
+                    setQuestionPage(1)
+                  },
+                },
+              ]}
+            />
           </div>
 
           <div className="mt-4 overflow-hidden rounded-xl border border-slate-200">

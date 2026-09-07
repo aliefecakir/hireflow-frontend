@@ -1,16 +1,17 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CalendarRange, Pencil } from 'lucide-react'
+import { CalendarRange, Pencil, Search } from 'lucide-react'
 import { getForms } from '../api/forms'
 import { isFlagOn } from '../api/helpers'
 import { getErrorMessage } from '../../shared/api/client'
 import { showToast } from '../../shared/toast/ToastProvider'
-import { formatDate, LoadingState } from './ui'
+import { formatDate, inputClass, LoadingState } from './ui'
 
 export default function FormListPage() {
   const navigate = useNavigate()
   const [forms, setForms] = useState([])
   const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -38,6 +39,12 @@ export default function FormListPage() {
     }
   }, [])
 
+  const filteredForms = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase('tr-TR')
+    if (!query) return forms
+    return forms.filter((form) => String(form.title || '').toLocaleLowerCase('tr-TR').includes(query))
+  }, [forms, search])
+
   if (loading) {
     return <LoadingState label="Formlar yükleniyor..." />
   }
@@ -47,17 +54,32 @@ export default function FormListPage() {
       <div>
         <h1 className="text-2xl font-bold text-slate-800">Akademi Formları</h1>
         <p className="mt-1 text-sm text-slate-600">
-          Forma tıklayarak başvuruları görüntüleyin. Üzerine gelince düzenleyebilirsiniz.
+          Forma tıklayarak başvuruları görüntüleyin.
         </p>
+        <label className="relative mt-4 block w-full sm:w-[calc((100%-1.5rem)/2)] xl:w-[calc((100%-3rem)/3)]">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Form adına göre ara"
+            className={`pl-9 ${inputClass}`}
+            aria-label="Form adına göre ara"
+          />
+        </label>
       </div>
 
       {forms.length === 0 ? (
         <div className="rounded-xl border border-slate-200 bg-white p-8 text-sm text-slate-500 shadow-sm">
           Akademi formu bulunamadı.
         </div>
+      ) : filteredForms.length === 0 ? (
+        <div className="rounded-xl border border-slate-200 bg-white p-8 text-sm text-slate-500 shadow-sm">
+          Bu ada uyan form bulunamadı.
+        </div>
       ) : (
         <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
-          {forms.map((form) => {
+          {filteredForms.map((form) => {
             const active = form.isActv == null || isFlagOn(form.isActv)
             return (
               <div

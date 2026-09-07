@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { DEFAULT_PAGE_SIZE, KIND_LABELS, PAGE_SIZE_OPTIONS, isFlagOn } from '../api/helpers'
 
 export const inputClass =
@@ -77,6 +77,67 @@ export function paginateRows(rows, page, size) {
     page: currentPage,
     size: pageSize,
   }
+}
+
+export function CompactCategoryFilter({ groups, activeId, onActiveChange }) {
+  const active = groups.find((group) => group.id === activeId) || groups[0]
+  if (!active) return null
+
+  const applied = groups
+    .map((group) => {
+      const selected = group.items.find((item) => item.id === group.value)
+      if (!selected || selected.id === 'all') return null
+      return { group, selected }
+    })
+    .filter(Boolean)
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="shrink-0 text-sm font-medium text-slate-700">Filtre uygula:</span>
+      <select
+        value={active.id}
+        onChange={(event) => onActiveChange(event.target.value)}
+        className="w-40 shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+        aria-label="Filtre kategorisi"
+      >
+        {groups.map((group) => (
+          <option key={group.id} value={group.id}>
+            {group.label}
+          </option>
+        ))}
+      </select>
+      <select
+        value={active.value}
+        onChange={(event) => active.onChange(event.target.value)}
+        className="w-52 shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+        aria-label={active.label}
+      >
+        {active.items.map((item) => (
+          <option key={item.id} value={item.id}>
+            {item.label}
+          </option>
+        ))}
+      </select>
+      {applied.map(({ group, selected }) => (
+        <span
+          key={group.id}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 py-1 pl-3 pr-1.5 text-xs font-medium text-blue-800"
+        >
+          <span>
+            {group.label}: {selected.label}
+          </span>
+          <button
+            type="button"
+            onClick={() => group.onChange('all')}
+            className="rounded-full p-0.5 text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-900"
+            aria-label={`${group.label} filtresini kaldır`}
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </span>
+      ))}
+    </div>
+  )
 }
 
 export function LoadingState({ label = 'Yükleniyor...' }) {

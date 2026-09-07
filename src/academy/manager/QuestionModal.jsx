@@ -1,16 +1,65 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Plus, Trash2, X } from 'lucide-react'
-import { getQuestionKind, toFlag } from '../api/helpers'
+import { getChoiceId, getQuestionKind, isFlagOn, toFlag } from '../api/helpers'
 import { showToast } from '../../shared/toast/ToastProvider'
 import { createEmptyChoice, inputClass, useEscape } from './ui'
 
-export default function QuestionModal({ onClose, onSave, saving, questionTypes }) {
+export default function QuestionModal({ 
+  onClose, 
+  onSave, 
+  onDelete,
+  saving, 
+  deleting,
+  questionTypes, 
+  question = null, // Düzenleme modu için
+  usage = null // Kullanım bilgisi
+}) {
+  const isEditMode = Boolean(question)
+  const canEditContent = !usage || usage.canEditContent
+  const canDelete = !usage || usage.canDelete
+  const hasExistingOther = Boolean(question?.choices?.find((c) => isFlagOn(c.isOther)))
+  const canToggleOther = canEditContent || !hasExistingOther
+  const formTitles = (usage?.formTitles || []).filter(Boolean)
+  const formTooltip = formTitles.join('\n')
+  
   const [questionText, setQuestionText] = useState('')
   const [tpId, setTpId] = useState('')
   const [isAssmt, setIsAssmt] = useState(false)
   const [maxScore, setMaxScore] = useState(10)
   const [choices, setChoices] = useState([createEmptyChoice(1, 1), createEmptyChoice(2, 2)])
+  const [includeOther, setIncludeOther] = useState(false)
+  const [otherMaxScore, setOtherMaxScore] = useState(10)
   useEscape(onClose)
+
+  // Düzenleme modunda mevcut değerleri yükle
+  useEffect(() => {
+    if (question) {
+      setQuestionText(question.questionText || '')
+      setTpId(String(question.tpId || ''))
+      setIsAssmt(isFlagOn(question.isAssmt))
+      setMaxScore(question.maxScore || 10)
+      
+      if (question.choices && question.choices.length > 0) {
+        const otherChoice = question.choices.find(c => isFlagOn(c.isOther))
+        const regularChoices = question.choices.filter(c => !isFlagOn(c.isOther))
+        
+        if (regularChoices.length > 0) {
+          setChoices(regularChoices.map((c, idx) => ({
+            key: getChoiceId(c) || idx + 1,
+            id: getChoiceId(c),
+            choiceText: c.choiceText || '',
+            score: c.score ?? 0,
+            ordNo: c.ordNo ?? idx + 1
+          })))
+        }
+        
+        if (otherChoice) {
+          setIncludeOther(true)
+          setOtherMaxScore(otherChoice.score ?? 10)
+        }
+      }
+    }
+  }, [question])
 
   const selectedType = questionTypes.find((item) => String(item.id) === String(tpId))
   const kind = selectedType ? getQuestionKind(selectedType, questionTypes) : null
@@ -21,11 +70,16 @@ export default function QuestionModal({ onClose, onSave, saving, questionTypes }
   const isPlainAnswerType = isFileType || isDateType
 
   const handleTypeChange = (nextTpId) => {
+    if (!canEditContent) return
     setTpId(nextTpId)
     const nextType = questionTypes.find((item) => String(item.id) === String(nextTpId))
     const nextKind = nextType ? getQuestionKind(nextType, questionTypes) : null
     if ((nextKind === 'single' || nextKind === 'multi') && choices.length < 2) {
       setChoices([createEmptyChoice(1, 1), createEmptyChoice(2, 2)])
+    }
+    if (nextKind !== 'single' && nextKind !== 'multi') {
+      setIncludeOther(false)
+      setOtherMaxScore(10)
     }
   }
 
@@ -40,6 +94,8 @@ export default function QuestionModal({ onClose, onSave, saving, questionTypes }
   }
 
   const removeChoice = (key) => {
+    const target = choices.find((choice) => choice.key === key)
+    if (!canEditContent && target?.id) return
     setChoices((prev) => prev.filter((choice) => choice.key !== key))
   }
 
@@ -54,9 +110,10 @@ export default function QuestionModal({ onClose, onSave, saving, questionTypes }
     const preparedChoices = isChoiceType
       ? choices
           .map((choice) => ({
+            id: choice.id, // Edit modunda mevcut şık id'si
             choiceText: String(choice.choiceText || '').trim(),
             score: Number(choice.score) || 0,
-            isOther: toFlag(choice.isOther),
+            isOther: 0,
           }))
           .filter((choice) => choice.choiceText)
           .map((choice, index) => ({
@@ -65,7 +122,26 @@ export default function QuestionModal({ onClose, onSave, saving, questionTypes }
           }))
       : []
 
-    if (isChoiceType && preparedChoices.length < 2) {
+    if (isChoiceType && includeOther && !isAssmt) {
+      const parsedOtherMax = Number(otherMaxScore)
+      if (!Number.isFinite(parsedOtherMax) || parsedOtherMax < 0) {
+        showToast.warning('Dikkat', 'Diğer şıkkı için geçerli bir max puan girin.')
+        return
+      }
+      
+      // Edit modunda mevcut "Diğer" şıkkının id'sini kullan
+      const existingOther = question?.choices?.find(c => isFlagOn(c.isOther))
+      
+      preparedChoices.push({
+        id: existingOther ? getChoiceId(existingOther) : undefined,
+        choiceText: 'Diğer',
+        score: parsedOtherMax,
+        isOther: 1,
+        ordNo: preparedChoices.length + 1,
+      })
+    }
+
+    if (isChoiceType && preparedChoices.filter((choice) => !choice.isOther).length < 2) {
       showToast.warning('Dikkat', 'Tek seçmeli ve çok seçmeli sorular için en az iki şık girin.')
       return
     }
@@ -78,13 +154,20 @@ export default function QuestionModal({ onClose, onSave, saving, questionTypes }
 
     const scores = preparedChoices.map((choice) => choice.score)
     onSave({
-      questionText: questionText.trim(),
-      tpId,
+      questionText: canEditContent ? questionText.trim() : undefined,
+      tpId: canEditContent ? tpId : undefined,
       minScore: isChoiceType ? Math.min(0, ...scores) : 0,
       maxScore: isChoiceType ? Math.max(0, ...scores) : (isPlainAnswerType ? 0 : parsedMaxScore),
-      isAssmt: toFlag(isFileType ? false : isAssmt),
+      isAssmt: canEditContent ? toFlag(isFileType ? false : isAssmt) : undefined,
       choices: preparedChoices,
     })
+  }
+
+  const handleDelete = () => {
+    if (!canDelete || !onDelete) return
+    if (window.confirm('Bu soruyu silmek istediğinizden emin misiniz?')) {
+      onDelete()
+    }
   }
 
   return (
@@ -98,10 +181,48 @@ export default function QuestionModal({ onClose, onSave, saving, questionTypes }
       >
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 p-6">
           <div>
-            <h2 className="text-lg font-bold text-slate-800">Yeni Soru Ekle</h2>
+            <h2 className="text-lg font-bold text-slate-800">
+              {isEditMode ? 'Soruyu Düzenle' : 'Yeni Soru Ekle'}
+            </h2>
             <p className="mt-1 text-sm text-slate-500">
-              Tipi seçince şıklar, max puan, tarih veya CV yükleme alanı otomatik açılır.
+              {isEditMode
+                ? (canEditContent
+                  ? 'Soru hiçbir formda ve cevapta kullanılmıyor, tüm alanları değiştirebilirsiniz.'
+                  : 'Soru kullanımda. Yeni şık ekleyebilir ve puanları değiştirebilirsiniz; mevcut şık metinleri kilitlidir.')
+                : 'Tipi seçince şıklar, max puan, tarih veya CV yükleme alanı otomatik açılır.'
+              }
             </p>
+            {isEditMode && usage && (usage.formCount > 0 || usage.answerCount > 0) ? (
+              <div className="mt-2 space-y-1 text-xs text-amber-700">
+                {usage.formCount > 0 ? (
+                  <p className="group relative inline-block cursor-help">
+                    <span className="underline decoration-dotted underline-offset-2">
+                      {usage.formCount} formda kullanılıyor
+                    </span>
+                    {formTitles.length > 0 ? (
+                      <ul
+                        role="tooltip"
+                        className="pointer-events-none absolute left-0 top-full z-20 mt-1.5 hidden min-w-[14rem] max-w-sm list-none rounded-lg bg-slate-800 px-3 py-2.5 text-left shadow-lg group-hover:block"
+                      >
+                        {formTitles.map((title, index) => (
+                          <li
+                            key={`${title}-${index}`}
+                            className="flex gap-2 whitespace-nowrap py-0.5 text-xs font-medium leading-5 text-white"
+                          >
+                            <span className="shrink-0 text-slate-400">{index + 1}.</span>
+                            <span>{title}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    <span className="sr-only">{formTooltip}</span>
+                  </p>
+                ) : null}
+                {usage.answerCount > 0 ? (
+                  <p>{usage.answerCount} cevapta kullanılıyor</p>
+                ) : null}
+              </div>
+            ) : null}
           </div>
           <button
             type="button"
@@ -122,7 +243,8 @@ export default function QuestionModal({ onClose, onSave, saving, questionTypes }
                 rows="3"
                 value={questionText}
                 onChange={(event) => setQuestionText(event.target.value)}
-                className={`mt-2 resize-none ${inputClass}`}
+                disabled={!canEditContent}
+                className={`mt-2 resize-none ${inputClass} ${!canEditContent ? 'bg-slate-50 cursor-not-allowed' : ''}`}
                 placeholder="Soruyu yazın."
               />
             </label>
@@ -133,7 +255,8 @@ export default function QuestionModal({ onClose, onSave, saving, questionTypes }
                 required
                 value={tpId}
                 onChange={(event) => handleTypeChange(event.target.value)}
-                className={`mt-2 ${inputClass}`}
+                disabled={!canEditContent}
+                className={`mt-2 ${inputClass} ${!canEditContent ? 'bg-slate-50 cursor-not-allowed' : ''}`}
               >
                 <option value="">Seçiniz</option>
                 {questionTypes.map((type) => (
@@ -151,7 +274,9 @@ export default function QuestionModal({ onClose, onSave, saving, questionTypes }
               <legend className="text-sm font-medium text-slate-700">Soru Amacı</legend>
               <div className="mt-2 grid gap-2 sm:grid-cols-2">
                 <label
-                  className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 text-sm ${
+                  className={`flex items-start gap-3 rounded-xl border px-4 py-3 text-sm ${
+                    !canEditContent ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
+                  } ${
                     !isAssmt ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-white text-slate-700'
                   }`}
                 >
@@ -159,7 +284,8 @@ export default function QuestionModal({ onClose, onSave, saving, questionTypes }
                     type="radio"
                     name="question-purpose"
                     checked={!isAssmt}
-                    onChange={() => setIsAssmt(false)}
+                    onChange={() => !canEditContent || setIsAssmt(false)}
+                    disabled={!canEditContent}
                     className="mt-0.5 h-4 w-4 text-emerald-600 focus:ring-emerald-500"
                   />
                   <span>
@@ -169,7 +295,7 @@ export default function QuestionModal({ onClose, onSave, saving, questionTypes }
                 </label>
                 <label
                   className={`flex items-start gap-3 rounded-xl border px-4 py-3 text-sm ${
-                    isFileType
+                    isFileType || !canEditContent
                       ? 'cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400'
                       : isAssmt
                         ? 'cursor-pointer border-orange-300 bg-orange-50 text-orange-800'
@@ -180,8 +306,13 @@ export default function QuestionModal({ onClose, onSave, saving, questionTypes }
                     type="radio"
                     name="question-purpose"
                     checked={isAssmt && !isFileType}
-                    disabled={isFileType}
-                    onChange={() => setIsAssmt(true)}
+                    disabled={isFileType || !canEditContent}
+                    onChange={() => {
+                      if (canEditContent) {
+                        setIsAssmt(true)
+                        setIncludeOther(false)
+                      }
+                    }}
                     className="mt-0.5 h-4 w-4 text-orange-500 focus:ring-orange-500"
                   />
                   <span>
@@ -200,7 +331,9 @@ export default function QuestionModal({ onClose, onSave, saving, questionTypes }
                   <div>
                     <h3 className="text-sm font-semibold text-slate-800">Şıklar</h3>
                     <p className="mt-0.5 text-xs text-slate-500">
-                      Şık metni, puanı ve varsa “Diğer” işaretini girin.
+                      {canEditContent
+                        ? 'Şık metnini ve puanını girin.'
+                        : 'Yeni şık ekleyebilir ve puanları değiştirebilirsiniz. Mevcut şık metinleri değiştirilemez.'}
                     </p>
                   </div>
                   <button
@@ -213,24 +346,28 @@ export default function QuestionModal({ onClose, onSave, saving, questionTypes }
                   </button>
                 </div>
 
-                <div className="mt-4 hidden grid-cols-[1fr_7rem_auto_auto] gap-3 px-1 text-xs font-semibold uppercase tracking-wide text-slate-500 sm:grid">
+                <div className="mt-4 hidden grid-cols-[1fr_7rem_auto] gap-3 px-1 text-xs font-semibold uppercase tracking-wide text-slate-500 sm:grid">
                   <span>Şık Metni</span>
                   <span>Puan</span>
-                  <span>Diğer</span>
                   <span className="sr-only">Sil</span>
                 </div>
 
                 <div className="mt-2 space-y-3">
-                  {choices.map((choice, index) => (
+                  {choices.map((choice, index) => {
+                    const isExistingChoice = Boolean(choice.id)
+                    const choiceTextLocked = !canEditContent && isExistingChoice
+                    const choiceRemoveLocked = (!canEditContent && isExistingChoice) || choices.length <= 2
+                    return (
                     <div
                       key={choice.key}
-                      className="grid grid-cols-1 items-center gap-3 sm:grid-cols-[1fr_7rem_auto_auto]"
+                      className="grid grid-cols-1 items-center gap-3 sm:grid-cols-[1fr_7rem_auto]"
                     >
                       <input
                         type="text"
                         value={choice.choiceText}
                         onChange={(event) => updateChoice(choice.key, 'choiceText', event.target.value)}
-                        className={inputClass}
+                        disabled={choiceTextLocked}
+                        className={`${inputClass} ${choiceTextLocked ? 'bg-slate-50 cursor-not-allowed' : ''}`}
                         placeholder={`${index + 1}. şık metni`}
                       />
                       <input
@@ -241,27 +378,54 @@ export default function QuestionModal({ onClose, onSave, saving, questionTypes }
                         placeholder="Puan"
                         aria-label="Bu şıkkın puanı"
                       />
-                      <label className="flex items-center gap-1.5 text-xs font-medium text-slate-600">
-                        <input
-                          type="checkbox"
-                          checked={choice.isOther}
-                          onChange={(event) => updateChoice(choice.key, 'isOther', event.target.checked)}
-                          className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                        />
-                        Diğer (isOther)
-                      </label>
                       <button
                         type="button"
                         onClick={() => removeChoice(choice.key)}
-                        disabled={choices.length <= 2}
+                        disabled={choiceRemoveLocked}
                         className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
                         aria-label="Şıkkı sil"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
+
+                {!isAssmt ? (
+                  <>
+                    <label className={`mt-4 flex items-start gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 ${canToggleOther ? 'cursor-pointer' : 'cursor-not-allowed opacity-70'}`}>
+                      <input
+                        type="checkbox"
+                        checked={includeOther}
+                        disabled={!canToggleOther}
+                        onChange={(event) => setIncludeOther(event.target.checked)}
+                        className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span>
+                        <span className="block font-medium">Diğer şıkkı bulunsun mu?</span>
+                        <span className="mt-0.5 block text-xs text-slate-500">
+                          İşaretlenirse soruya “Diğer” şıkkı eklenir. Aday seçince açıklama yazar; puanı değerlendirmede siz verirsiniz.
+                        </span>
+                      </span>
+                    </label>
+
+                    {includeOther ? (
+                      <label className="mt-3 block text-sm font-medium text-slate-700">
+                        Diğer şıkkı max puanını belirleyin.
+                        <input
+                          type="number"
+                          required
+                          min="0"
+                          value={otherMaxScore}
+                          onChange={(event) => setOtherMaxScore(event.target.value)}
+                          className={`mt-2 ${inputClass}`}
+                          placeholder="Örn: 10"
+                        />
+                      </label>
+                    ) : null}
+                  </>
+                ) : null}
               </div>
             ) : null}
 
@@ -293,25 +457,39 @@ export default function QuestionModal({ onClose, onSave, saving, questionTypes }
             ) : null}
           </div>
 
-          <div className="flex items-center justify-end gap-3 border-t border-slate-200 bg-slate-50 p-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg bg-slate-200 px-5 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-300"
-            >
-              İptal
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {saving ? 'Kaydediliyor...' : 'Soruyu Kaydet'}
-            </button>
+          <div className="flex items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 p-4">
+            <div>
+              {isEditMode && canDelete ? (
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="rounded-lg bg-red-600 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {deleting ? 'Siliniyor...' : 'Soruyu Sil'}
+                </button>
+              ) : null}
+            </div>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-lg bg-slate-200 px-5 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-300"
+              >
+                İptal
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {saving ? 'Kaydediliyor...' : isEditMode ? 'Değişiklikleri Kaydet' : 'Soruyu Kaydet'}
+              </button>
+            </div>
           </div>
         </form>
       </div>
     </div>
   )
 }
-
+
