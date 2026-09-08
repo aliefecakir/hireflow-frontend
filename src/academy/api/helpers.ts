@@ -1,3 +1,4 @@
+// Academy ortak kurallar: soru tipi, bayrak, form görünürlüğü.
 export const PAGE_SIZE_OPTIONS = [10, 20, 50] as const
 export const DEFAULT_PAGE_SIZE = 10
 
@@ -30,6 +31,7 @@ export interface QuestionType {
 
 export type CatalogQuestionType = QuestionType & { kind: QuestionKind }
 
+// Backend 1/0 veya true/false bayrakları.
 export function isFlagOn(value: unknown): boolean {
   return value === true || value === 1 || value === '1'
 }
@@ -38,6 +40,7 @@ export function toFlag(value: unknown): number {
   return isFlagOn(value) ? 1 : 0
 }
 
+// API alan adı farklarını tek id'ye indirger.
 export function getQuestionId(question: { id?: number; questionId?: number } | null | undefined): number | undefined {
   return question?.questionId ?? question?.id
 }
@@ -59,6 +62,7 @@ type KindSource = {
   choices?: unknown[] | null
 }
 
+// Tip tespiti için metni sadeleştirir (TR karakter, kısaltma).
 function fold(value: unknown): string {
   return String(value ?? '')
     .replace(/İ/g, 'i')
@@ -76,6 +80,7 @@ function fold(value: unknown): string {
     .trim()
 }
 
+// Cevap metninin tarih veya CV URL'i olup olmadığı.
 export function isDateAnswerValue(value: unknown): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(String(value || '').trim())
 }
@@ -93,6 +98,7 @@ export function isFileAnswerUrl(value: unknown): boolean {
   }
 }
 
+// Kod/isim metninden soru türü (single/multi/open/file/date).
 function kindFromText(value: unknown): QuestionKind | null {
   const text = fold(value)
   if (!text) return null
@@ -143,6 +149,7 @@ function kindFromMeta(source: KindSource | CatalogQuestionType | null | undefine
     || ('entCodeName' in source ? kindFromText(source.entCodeName) : null)
 }
 
+// Mülakat kriteri (isAssmt) olmayan aday soruları.
 export function isCandidateQuestion(question: { isAssmt?: unknown } | null | undefined): boolean {
   return !isFlagOn(question?.isAssmt)
 }
@@ -165,6 +172,7 @@ export function getSelectedChoiceIds(answer: {
   return []
 }
 
+// /questions/types cevabına kind ekler.
 export function normalizeQuestionTypes(rows: unknown): CatalogQuestionType[] {
   const result = (Array.isArray(rows) ? rows : [])
     .map((row) => {
@@ -189,6 +197,7 @@ function kindFromChoicelessFallback(question: KindSource): QuestionKind | null {
   return kindFromText(question.questionText) || kindFromText(question.name)
 }
 
+// Katalog + şık/metin fallback ile soru türünü çözer.
 export function getQuestionKind(
   question: KindSource | null | undefined,
   catalog: Array<Pick<CatalogQuestionType, 'id' | 'kind' | 'name' | 'shrtCode' | 'entCodeName'>> = [],
@@ -233,6 +242,7 @@ export function getQuestionKind(
   return 'single'
 }
 
+// Form tarihleri: süresi doldu mu, başladı mı, adaya açık mı.
 export function parseFormDate(value: unknown): Date | null {
   if (!value) return null
   const parsed = new Date(String(value))

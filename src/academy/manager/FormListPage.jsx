@@ -1,3 +1,4 @@
+// Form listesi: ara, başvurulara git, düzenle.
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CalendarRange, Pencil, Search } from 'lucide-react'
@@ -13,6 +14,7 @@ export default function FormListPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
 
+  // Aktif + pasif tüm formlar.
   useEffect(() => {
     let cancelled = false
 
@@ -39,6 +41,7 @@ export default function FormListPage() {
     }
   }, [])
 
+  // Başlığa göre TR arama.
   const filteredForms = useMemo(() => {
     const query = search.trim().toLocaleLowerCase('tr-TR')
     if (!query) return forms
@@ -81,6 +84,7 @@ export default function FormListPage() {
         <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
           {filteredForms.map((form) => {
             const active = isFormVisibleToCandidates(form)
+            // Kart tık → başvurular; kalem → düzenle
             return (
               <div
                 key={form.formId}

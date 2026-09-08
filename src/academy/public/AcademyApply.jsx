@@ -1,3 +1,4 @@
+// Aday başvuru formu: /academy/apply/:formId
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, GraduationCap, Upload } from 'lucide-react'
@@ -30,6 +31,7 @@ const inputClass =
 const ACADEMY_CV_BUCKET = 'academy-files'
 const MAX_CV_BYTES = 5 * 1024 * 1024
 
+// PDF CV → Supabase academy-files, public URL döner.
 async function uploadAcademyCv(formId, file) {
   if (!file) {
     throw new Error('Lütfen bir CV dosyası seçin.')
@@ -112,6 +114,7 @@ function LoadingState({ label = 'Yükleniyor...' }) {
   )
 }
 
+// Supabase UNIVERSITY / DEPARTMENT satırını {id, name} yapar.
 function pickField(row, keys) {
   if (!row) return undefined
   for (const key of keys) {
@@ -158,6 +161,7 @@ export default function AcademyApply() {
   const [submitting, setSubmitting] = useState(false)
   const [phoneError, setPhoneError] = useState('')
 
+  // departments.json yedek katalog.
   const fallbackDepartments = useMemo(
     () =>
       (departmentCatalog || [])
@@ -166,6 +170,7 @@ export default function AcademyApply() {
     [],
   )
 
+  // Form, sorular, uni/bölüm, tipler; applyState: open | upcoming | closed.
   useEffect(() => {
     let cancelled = false
 
@@ -269,6 +274,7 @@ export default function AcademyApply() {
     }))
   }
 
+  // Zorunlu alan kontrolü + API answers payload.
   const buildAnswers = () => {
     const payload = []
 
@@ -329,6 +335,7 @@ export default function AcademyApply() {
     return payload
   }
 
+  // PDF yükle, URL'i cevap olarak tut.
   const handleCvSelect = async (questionId, file) => {
     if (!file) return
     setAnswerField(questionId, 'fileName', file.name)
@@ -352,6 +359,7 @@ export default function AcademyApply() {
     }
   }
 
+  // Telefon, profil, cevaplar → applyToForm.
   const handleSubmit = async (event) => {
     event.preventDefault()
     if (submitting) return
@@ -428,6 +436,7 @@ export default function AcademyApply() {
             <LoadingState />
           </div>
         ) : applyState !== 'open' ? (
+          /* Kapalı / henüz başlamamış ilan */
           <div className="rounded-2xl bg-white p-6 text-center shadow-md sm:p-8">
             <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50">
               <GraduationCap className="h-7 w-7 text-blue-600" />
@@ -457,6 +466,7 @@ export default function AcademyApply() {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Ad, soyad, e-posta, telefon, üniversite, bölüm */}
             <div className="rounded-2xl bg-white p-6 shadow-md sm:p-8">
               <h1 className="text-2xl font-bold text-slate-900">{formTitle}</h1>
               <p className="mt-2 text-sm text-slate-500">
@@ -552,6 +562,7 @@ export default function AcademyApply() {
               </div>
             </div>
 
+            {/* Aday soruları: tarih / CV / açık uçlu / şık */}
             <div className="space-y-4">
               {questions.length === 0 ? (
                 <div className="rounded-2xl bg-white p-6 text-sm text-slate-500 shadow-md">

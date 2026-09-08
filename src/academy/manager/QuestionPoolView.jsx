@@ -1,3 +1,4 @@
+// Havuz listesi: filtre, kartlar, soru oluştur/düzenle/sil.
 import { useMemo, useState } from 'react'
 import { Edit2, Plus } from 'lucide-react'
 import { DEFAULT_PAGE_SIZE, getChoiceId, getQuestionId, getQuestionKind, isFlagOn, KIND_LABELS } from '../api/helpers'
@@ -37,6 +38,7 @@ export default function QuestionPoolView({ questions, questionTypes, onAddQuesti
   const [updatingQuestion, setUpdatingQuestion] = useState(false)
   const [deletingQuestion, setDeletingQuestion] = useState(false)
 
+  // Amaç, tip, kullanılmayan.
   const filteredQuestions = useMemo(() => {
     return (questions || []).filter((question) => {
       if (purposeFilter === 'candidate' && isFlagOn(question.isAssmt)) return false
@@ -54,6 +56,7 @@ export default function QuestionPoolView({ questions, questionTypes, onAddQuesti
     setPage(1)
   }
 
+  // Kullanım bilgisi ile düzenleme modalı.
   const handleEditQuestion = async (question) => {
     setLoadingUsage(true)
     try {
@@ -222,6 +225,7 @@ export default function QuestionPoolView({ questions, questionTypes, onAddQuesti
         />
       </div>
 
+      {/* Create veya edit; usage alan kilidini belirler */}
       {showModal && (
         <QuestionModal
           saving={editingQuestion ? updatingQuestion : savingQuestion}

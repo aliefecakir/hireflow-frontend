@@ -1,9 +1,11 @@
+// Soru oluştur / düzenle / sil. Kullanımdaysa metin kilitlenir.
 import { useEffect, useRef, useState } from 'react'
 import { Plus, Trash2, X } from 'lucide-react'
 import { getChoiceId, getQuestionKind, isFlagOn, toFlag } from '../api/helpers'
 import { showToast } from '../../shared/toast/ToastProvider'
 import { ConfirmDialog, createEmptyChoice, inputClass, useEscape } from './ui'
 
+// Dirty check özeti.
 function snapshotQuestion({
   questionText,
   tpId,
@@ -50,6 +52,7 @@ export default function QuestionModal({
   usage = null // Kullanım bilgisi
 }) {
   const isEditMode = Boolean(question)
+  // Kullanımda: metin/tip kilit; yeni şık ve puan serbest.
   const canEditContent = !usage || usage.canEditContent
   const canDelete = !usage || usage.canDelete
   const hasExistingOther = Boolean(question?.choices?.find((c) => isFlagOn(c.isOther)))
@@ -185,6 +188,7 @@ export default function QuestionModal({
     setChoices((prev) => prev.filter((choice) => choice.key !== key))
   }
 
+  // Şıklar, Diğer, min/max puan → API body.
   const buildPayload = () => {
     if (!tpId || !kind) {
       showToast.warning('Dikkat', 'Soru tipi seçin.')
@@ -333,6 +337,7 @@ export default function QuestionModal({
         </div>
 
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          {/* Metin, tip, amaç, şıklar / max puan / CV-tarih notu */}
           <div className="flex-1 space-y-5 overflow-y-auto p-6">
             <label className="block text-sm font-medium text-slate-700">
               Soru Metni

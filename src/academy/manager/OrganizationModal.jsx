@@ -1,3 +1,4 @@
+// Yeni organizasyon adı.
 import { useState } from 'react'
 import { X } from 'lucide-react'
 import { inputClass, useEscape } from './ui'

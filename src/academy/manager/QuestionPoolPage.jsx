@@ -1,3 +1,4 @@
+// Soru havuzu: yükle, yeni soru ekle → QuestionPoolView.
 import { useEffect, useState } from 'react'
 import { getQuestionId, normalizeQuestionTypes } from '../api/helpers'
 import { createQuestion, getQuestions, getQuestionTypes } from '../api/questions'
@@ -42,6 +43,7 @@ export default function QuestionPoolPage() {
     }
   }, [])
 
+  // Modal'dan create → listeye ekle.
   const handleAddQuestion = async (payload) => {
     setSavingQuestion(true)
     try {

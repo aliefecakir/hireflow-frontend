@@ -1,3 +1,4 @@
+// Form oluştur/düzenle: veri yükler, CreateFormView'e bırakır.
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { createForm, getFormDetail, updateForm } from '../api/forms'
@@ -24,6 +25,7 @@ export default function CreateFormPage() {
   const [organizationCatalog, setOrganizationCatalog] = useState([])
   const [loadingOrganizations, setLoadingOrganizations] = useState(false)
 
+  // Havuz, org, tipler; formId varsa detay.
   useEffect(() => {
     let cancelled = false
 
@@ -58,6 +60,7 @@ export default function CreateFormPage() {
     }
   }, [formId, navigate])
 
+  // Create veya update; tarihler gün başı/sonu.
   const handleSaveForm = async (payload) => {
     setSavingForm(true)
     try {
@@ -86,6 +89,7 @@ export default function CreateFormPage() {
     }
   }
 
+  // Modal'dan yeni soru → havuza ekle.
   const handleAddQuestion = async (payload) => {
     setSavingQuestion(true)
     try {
@@ -114,6 +118,7 @@ export default function CreateFormPage() {
     return organizationRows
   }
 
+  // Detay modalı: aktif + pasif org listesi.
   const handleOpenOrganizationDetails = async () => {
     setLoadingOrganizations(true)
     try {

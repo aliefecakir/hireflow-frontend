@@ -1,3 +1,4 @@
+// Aday ilan listesi: /academy
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, Calendar, GraduationCap } from 'lucide-react'
@@ -30,6 +31,7 @@ export default function Academy() {
   const [forms, setForms] = useState([])
   const [loading, setLoading] = useState(true)
 
+  // Aktif ve süresi bitmemiş formları çek.
   useEffect(() => {
     let cancelled = false
 
@@ -80,6 +82,7 @@ export default function Academy() {
         {loading ? (
           <LoadingState />
         ) : forms.length > 0 ? (
+          /* İlan kartları + başvur / henüz başlamadı */
           <div className="mx-auto grid w-full max-w-4xl gap-6">
             {forms.map((form) => (
               <article

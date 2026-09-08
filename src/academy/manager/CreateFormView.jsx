@@ -1,3 +1,4 @@
+// Form ekranı: meta alanlar + havuzdan soru bağlama.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { GripVertical, List, Plus } from 'lucide-react'
 import {
@@ -23,6 +24,7 @@ const EMPTY_FORM = {
   edate: '',
 }
 
+// Dirty check için form + bağlı soru özeti.
 function snapshotForm(formData, attachments, isActv) {
   return JSON.stringify({
     title: String(formData.title || '').trim(),
@@ -77,6 +79,7 @@ export default function CreateFormView({
   const isEditing = Boolean(editingForm?.formId)
   const isDirty = snapshotForm(formData, attachments, isActv) !== baselineRef.current
 
+  // Edit: formu ve attachments'ı doldur; süresi geçmişse pasif.
   useEffect(() => {
     if (!editingForm) {
       setFormData(EMPTY_FORM)
@@ -130,6 +133,7 @@ export default function CreateFormView({
     }
   }, [organizations, formData.organizationId])
 
+  // Amaç/tip filtresi; bağlı sorular üstte, ordNo sırası.
   const filteredQuestions = useMemo(() => {
     let rows = [...(questions || [])]
     if (purposeFilter === 'candidate') rows = rows.filter((question) => !isFlagOn(question.isAssmt))
@@ -162,6 +166,7 @@ export default function CreateFormView({
     }))
   }
 
+  // Forma bağla (üste ekle) / çıkar / sürükle-sırala.
   const attachQuestion = (questionId) => {
     setAttachments((prev) => prependAttachment(prev, questionId))
     setQuestionPage(1)
@@ -224,6 +229,7 @@ export default function CreateFormView({
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Başlık, açıklama, org, tarihler, aktif */}
         <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
           <div className="grid gap-5 sm:grid-cols-2">
             <label className="block text-sm font-medium text-slate-700 sm:col-span-2">
@@ -330,6 +336,7 @@ export default function CreateFormView({
           </div>
         </div>
 
+        {/* Havuz: seç, zorunlu, sıra; sürükle-bırak */}
         <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -530,6 +537,7 @@ export default function CreateFormView({
         </div>
       </form>
 
+      {/* Org oluştur / org aktif-pasif / yeni soru / kaydet-iptal onayı */}
       {showOrgModal && (
         <OrganizationModal
           saving={savingOrganization}

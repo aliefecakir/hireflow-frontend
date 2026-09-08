@@ -1,3 +1,4 @@
+// Organizasyon sözlüğü: liste, oluştur, aktif/pasif.
 import { academyRequest } from './request'
 
 export interface OrganizationLookup {

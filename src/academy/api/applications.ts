@@ -1,3 +1,4 @@
+// Başvuru listesi, durum, detay ve puanlama.
 import { academyRequest } from './request'
 import type { QuestionChoice } from './helpers'
 
@@ -122,6 +123,7 @@ export interface EvaluateApplicationResult {
   statusDescr?: string | null
 }
 
+// Liste + durum kataloğu + durum güncelleme.
 export function getFormApplications(formId: number | string): Promise<FormApplication[]> {
   return academyRequest<FormApplication[]>(`/academy/forms/${formId}/applications`)
 }
@@ -147,6 +149,7 @@ export function getApplicationDetails(appId: number | string): Promise<Applicati
   return academyRequest<ApplicationDetails>(`/academy/applications/${appId}/details`)
 }
 
+// Mülakat cevapları + manuel puanlar.
 export function evaluateApplication(
   appId: number | string,
   data: EvaluateApplicationPayload,
@@ -157,6 +160,7 @@ export function evaluateApplication(
   })
 }
 
+// Tek soruya anlık yönetici puanı.
 export function saveManualScore(
   appId: number | string,
   data: ManualScorePayload,

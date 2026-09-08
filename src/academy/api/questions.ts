@@ -1,3 +1,4 @@
+// Soru havuzu: liste, tip, kullanım, CRUD.
 import { academyRequest } from './request'
 import type { QuestionChoice, QuestionType } from './helpers'
 
@@ -62,6 +63,7 @@ export function getQuestionTypes(): Promise<QuestionType[]> {
   return academyRequest<QuestionType[]>('/academy/questions/types', { optionalAuth: true })
 }
 
+// Form/cevap sayısı — modal alan kilidi için.
 export function getQuestionUsage(questionId: number): Promise<QuestionUsage> {
   return academyRequest<QuestionUsage>(`/academy/questions/${questionId}/usage`)
 }

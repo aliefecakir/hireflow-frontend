@@ -1,3 +1,4 @@
+// Yönetici ortak UI: input, pager, badge, confirm, attachment sırası.
 import { useEffect } from 'react'
 import { ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { DEFAULT_PAGE_SIZE, KIND_LABELS, PAGE_SIZE_OPTIONS, isFlagOn } from '../api/helpers'
@@ -10,6 +11,7 @@ export function toDateInput(value) {
   return String(value).slice(0, 10)
 }
 
+// Forma bağlı soru map: sıra, üste ekle, sürükle.
 export function renumberAttachments(map) {
   const rows = Object.values(map).sort((a, b) => Number(a.ordNo) - Number(b.ordNo))
   const next = {}
@@ -44,6 +46,7 @@ export function reorderAttachments(map, fromId, toId) {
   return next
 }
 
+// İsim, tarih, durum rengi.
 export function displayName(profile) {
   return [profile?.firstName, profile?.lastName].filter(Boolean).join(' ').trim()
 }
@@ -79,6 +82,7 @@ export function createEmptyChoice(ordNo, key = Date.now() + ordNo) {
   return { key, choiceText: '', score: 0, isOther: false }
 }
 
+// Modal kapatma (Escape) ve kaydet/iptal onayı.
 export function useEscape(onClose) {
   useEffect(() => {
     const onKeyDown = (event) => {
@@ -134,6 +138,7 @@ export function ConfirmDialog({
   )
 }
 
+// İstemci sayfalama + kategori filtresi.
 export function paginateRows(rows, page, size) {
   const list = Array.isArray(rows) ? rows : []
   const total = list.length
@@ -275,6 +280,7 @@ export function TablePager({ page, size, total, onPageChange, onSizeChange, disa
   )
 }
 
+// Aktif/pasif toggle.
 export function Switch({ checked, onChange, label, disabled = false }) {
   return (
     <button

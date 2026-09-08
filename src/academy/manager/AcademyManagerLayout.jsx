@@ -1,3 +1,4 @@
+// Yönetici kabuğu: header, menü, Outlet.
 import { useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { CircleHelp, ClipboardList, FilePlus } from 'lucide-react'
@@ -11,6 +12,7 @@ const MENU_ITEMS = [
   { id: 'pool', label: 'Soru Havuzu', icon: CircleHelp, to: '/academy/manager/pool' },
 ]
 
+// create/edit aynı menü; pool ayrı; geri kalan forms.
 function isMenuActive(itemId, pathname) {
   const createActive = pathname.endsWith('/create') || /\/forms\/[^/]+\/edit$/.test(pathname)
   const poolActive = pathname.endsWith('/pool')
@@ -84,6 +86,7 @@ export default function AcademyManagerLayout() {
       </header>
 
       <div className="flex flex-1 overflow-hidden">
+        {/* Formlar / Form Oluştur / Soru Havuzu */}
         <aside className="w-60 flex-shrink-0 overflow-y-auto border-r border-gray-200 bg-white">
           <nav className="p-4">
             <ul className="space-y-1">
@@ -116,6 +119,7 @@ export default function AcademyManagerLayout() {
         </aside>
 
         <main className="flex-1 overflow-y-auto bg-gray-50 p-6">
+          {/* Alt sayfa: forms, create, pool, applications */}
           <Outlet />
         </main>
       </div>

@@ -1,3 +1,4 @@
+// Org listesi: aktif/pasif switch. Pasif olanlar form select'te yok.
 import { X } from 'lucide-react'
 import { isFlagOn } from '../api/helpers'
 import { LoadingState, Switch, useEscape } from './ui'

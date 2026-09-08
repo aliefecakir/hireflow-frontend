@@ -1,3 +1,4 @@
+// Listeden hızlı durum + açıklama güncelleme.
 import { useState } from 'react'
 import { X } from 'lucide-react'
 import { fullName, inputClass, useEscape } from './ui'
@@ -7,6 +8,7 @@ export default function StatusModal({ application, statuses, saving, onClose, on
   const [statusDescr, setStatusDescr] = useState(application?.statusDescr || '')
   useEscape(onClose)
 
+  // Katalogda yoksa mevcut durumu options'a ekle.
   const options = [...statuses]
   if (application?.stId && !options.some((item) => String(item.stId) === String(application.stId))) {
     options.unshift({

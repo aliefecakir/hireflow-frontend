@@ -1,3 +1,4 @@
+// Form listesi, detay, kayıt ve aday başvurusu.
 import { academyRequest } from './request'
 import type { QuestionChoice } from './helpers'
 
@@ -68,6 +69,7 @@ export interface AcademyApplyResult {
   statusDescr?: string | null
 }
 
+// GET /academy/forms — aday tarafı optionalAuth.
 export function getForms(options: { includeInactive?: boolean } = {}): Promise<AcademyForm[]> {
   const query = options.includeInactive ? '?includeInactive=true' : ''
   return academyRequest<AcademyForm[]>(`/academy/forms${query}`, { optionalAuth: true })
@@ -81,6 +83,7 @@ export function getFormQuestions(formId: number | string): Promise<FormQuestion[
   return academyRequest<FormQuestion[]>(`/academy/forms/${formId}/questions`, { optionalAuth: true })
 }
 
+// Yönetici: form oluştur / güncelle.
 export function createForm(data: CreateFormPayload): Promise<AcademyForm> {
   return academyRequest<AcademyForm>('/academy/forms', {
     method: 'POST',
@@ -95,6 +98,7 @@ export function updateForm(formId: number | string, data: CreateFormPayload): Pr
   })
 }
 
+// Aday başvurusu (giriş zorunlu değil).
 export function applyToForm(formId: number | string, data: AcademyApplyPayload): Promise<AcademyApplyResult> {
   return academyRequest<AcademyApplyResult>(`/academy/forms/${formId}/apply`, {
     method: 'POST',

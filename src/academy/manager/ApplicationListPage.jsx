@@ -1,3 +1,4 @@
+// Form başvuruları: durum, görüntüle, değerlendir.
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Eye, Pencil, Users } from 'lucide-react'
@@ -35,6 +36,7 @@ export default function ApplicationListPage() {
   const [evaluation, setEvaluation] = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
 
+  // Başvurular, durumlar, form başlığı.
   useEffect(() => {
     let cancelled = false
 
@@ -70,6 +72,7 @@ export default function ApplicationListPage() {
     }
   }, [formId, refreshKey, location.state?.form])
 
+  // StatusModal kaydı → satırı yerinde güncelle.
   const handleSaveStatus = async ({ stId, statusDescr }) => {
     if (!statusApp || savingStatus) return
 
@@ -209,6 +212,7 @@ export default function ApplicationListPage() {
         )}
       </div>
 
+      {/* Durum güncelle / görüntüle veya değerlendir */}
       {statusApp ? (
         <StatusModal
           application={statusApp}

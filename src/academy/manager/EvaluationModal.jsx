@@ -1,3 +1,4 @@
+// Aday detayı ve değerlendirme: puanlar, cevaplar, mülakat, durum.
 import { useEffect, useRef, useState } from 'react'
 import { Check, ChevronDown, X } from 'lucide-react'
 import {
@@ -22,6 +23,7 @@ import { getErrorMessage } from '../../shared/api/client'
 import { showToast } from '../../shared/toast/ToastProvider'
 import { fullName, inputClass, LoadingState, ReadOnlyField, statusBadgeClass, useEscape, ConfirmDialog } from './ui'
 
+// Mülakat satırını date / open / single / multi çizer.
 function isInterviewDateCriterion(criterion, questionTypes = []) {
   const kind = getQuestionKind(criterion, questionTypes)
   if (kind === 'date') return true
@@ -56,6 +58,7 @@ function getSelectedOtherChoice(answer) {
   )) || null
 }
 
+// Açık uçlu veya "Diğer" seçildiyse yönetici puanı gerekir.
 function needsManualScore(answer) {
   return isOpenEndedCandidateAnswer(answer) || Boolean(getSelectedOtherChoice(answer))
 }
@@ -77,6 +80,7 @@ function readAnswerScore(answer) {
   return Number.isFinite(value) ? value : null
 }
 
+// Satır satır yönetici puanı (Check → saveManualScore).
 function ManualScoreField({ maxScore, value, onChange, onSave, saving, saved, readOnly = false }) {
   if (readOnly) {
     const hasValue = value !== '' && value != null
@@ -193,6 +197,7 @@ function isManualScoreSaved(answer, currentValue, committedScores) {
   return Number(committedScores[questionId]) === Number(currentValue)
 }
 
+// Dirty check: mülakat, manuel puan, durum.
 function snapshotEvaluation({ scores, texts, manualScores, stId, statusDescr, details }) {
   const scoresNorm = {}
   const textsNorm = {}
@@ -268,6 +273,7 @@ export default function EvaluationModal({ appId, onClose, onSaved, statuses: sta
     onCloseRef.current = onClose
   }, [onClose])
 
+  // Detay, durumlar, soru tipleri; mevcut puanları baseline'a yaz.
   useEffect(() => {
     let cancelled = false
 
@@ -339,6 +345,7 @@ export default function EvaluationModal({ appId, onClose, onSaved, statuses: sta
     }
   }, [appId])
 
+  // Mülakat cevapları + bekleyen manuel puanlar + durum.
   const performSave = async () => {
     if (readOnly || saving) return
 
@@ -416,6 +423,7 @@ export default function EvaluationModal({ appId, onClose, onSaved, statuses: sta
     setConfirmAction('save')
   }
 
+  // Tek soruya anlık puan.
   const handleSaveManualScore = async (answer) => {
     if (readOnly || saving || savingQuestionId) return
     const questionId = answer.questionId
@@ -530,7 +538,7 @@ export default function EvaluationModal({ appId, onClose, onSaved, statuses: sta
         ) : (
           <form onSubmit={handleSave} className="flex min-h-0 flex-1 flex-col">
             <div className="flex-1 space-y-6 overflow-y-auto p-6">
-              {/* Puan Özeti */}
+              {/* Uni / bölüm / mülakat / toplam */}
               <section className="rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-5">
                 <h3 className="text-sm font-semibold text-slate-800">📊 Puan Özeti</h3>
                 <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -553,6 +561,7 @@ export default function EvaluationModal({ appId, onClose, onSaved, statuses: sta
                 </div>
               </section>
 
+              {/* Ad, iletişim, üniversite / bölüm puanı */}
               <CollapsibleSection
                 title="Kişisel bilgiler"
                 hint={[details?.universityName, details?.departmentName].filter(Boolean).join(' · ') || 'Ad, iletişim, üniversite ve bölüm'}
@@ -589,6 +598,7 @@ export default function EvaluationModal({ appId, onClose, onSaved, statuses: sta
                 </div>
               </CollapsibleSection>
 
+              {/* Aday cevapları; açık uçlu / Diğer için manuel puan */}
               <CollapsibleSection
                 title="Form cevapları"
                 hint={
@@ -757,6 +767,7 @@ export default function EvaluationModal({ appId, onClose, onSaved, statuses: sta
                   )}
               </CollapsibleSection>
 
+              {/* Yönetici mülakat kriterleri */}
               <CollapsibleSection
                 title="Mülakat"
                 hint={
@@ -874,6 +885,7 @@ export default function EvaluationModal({ appId, onClose, onSaved, statuses: sta
                   )}
               </CollapsibleSection>
 
+              {/* Başvuru durumu */}
               <CollapsibleSection
                 title={readOnly ? 'Durum' : 'Durum değiştirme'}
                 hint={selectedStatus?.name || undefined}
