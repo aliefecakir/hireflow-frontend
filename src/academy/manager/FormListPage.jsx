@@ -1,7 +1,8 @@
 // Form listesi: ara, başvurulara git, düzenle.
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CalendarRange, Pencil, Search } from 'lucide-react'
+import { CalendarRange, Pencil, Search, User } from 'lucide-react'
+import { getFormApplications } from '../api/applications'
 import { getForms } from '../api/forms'
 import { isFormVisibleToCandidates } from '../api/helpers'
 import { getErrorMessage } from '../../shared/api/client'
@@ -21,8 +22,22 @@ export default function FormListPage() {
     const load = async () => {
       try {
         const data = await getForms({ includeInactive: true })
+        const rows = Array.isArray(data) ? data : []
+        const needsCount = rows.some((form) => form.applicationCount == null)
+        const withCounts = needsCount
+          ? await Promise.all(
+              rows.map(async (form) => {
+                try {
+                  const apps = await getFormApplications(form.formId)
+                  return { ...form, applicationCount: Array.isArray(apps) ? apps.length : 0 }
+                } catch {
+                  return { ...form, applicationCount: 0 }
+                }
+              }),
+            )
+          : rows
         if (!cancelled) {
-          setForms(Array.isArray(data) ? data : [])
+          setForms(withCounts)
         }
       } catch (error) {
         console.error('Akademi formları yüklenemedi:', error)
@@ -84,6 +99,8 @@ export default function FormListPage() {
         <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
           {filteredForms.map((form) => {
             const active = isFormVisibleToCandidates(form)
+            const applicationCount = Number(form.applicationCount)
+            const countLabel = Number.isFinite(applicationCount) ? applicationCount : 0
             // Kart tık → başvurular; kalem → düzenle
             return (
               <div
@@ -107,6 +124,13 @@ export default function FormListPage() {
                     >
                       <Pencil className="h-4 w-4" />
                     </button>
+                    <span
+                      className="inline-flex items-center gap-1 text-xs font-medium text-slate-600"
+                      aria-label={`${countLabel} başvuru`}
+                    >
+                      <User className="h-3.5 w-3.5" />
+                      {countLabel}
+                    </span>
                     <span
                       className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${
                         active

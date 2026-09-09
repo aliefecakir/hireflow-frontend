@@ -4,7 +4,12 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import { CircleHelp, ClipboardList, FilePlus } from 'lucide-react'
 import BrandMark from '../../shared/BrandMark'
 import { useAuth } from '../../shared/AuthContext'
-import { displayName } from './ui'
+import { ConfirmDialog, displayName } from './ui'
+import {
+  UNSAVED_CHANGES_MESSAGE,
+  UnsavedChangesProvider,
+  useUnsavedChanges,
+} from './UnsavedChangesContext'
 
 const MENU_ITEMS = [
   { id: 'forms', label: 'Formlar', hint: 'Ana Sayfa', icon: ClipboardList, to: '/academy/manager/forms' },
@@ -21,11 +26,23 @@ function isMenuActive(itemId, pathname) {
   return !createActive && !poolActive
 }
 
-export default function AcademyManagerLayout() {
+function sameLocation(pathname, search, href) {
+  try {
+    const url = new URL(href, window.location.origin)
+    return url.pathname === pathname && url.search === search
+  } catch {
+    return false
+  }
+}
+
+function AcademyManagerShell() {
   const navigate = useNavigate()
-  const { pathname } = useLocation()
+  const { pathname, search } = useLocation()
   const { userProfile, signOut } = useAuth()
+  const { isDirty, setDirty } = useUnsavedChanges()
   const [showProfileMenu, setShowProfileMenu] = useState(false)
+  const [confirmKind, setConfirmKind] = useState(null)
+  const [pendingHref, setPendingHref] = useState(null)
   const userName = displayName(userProfile)
 
   const handleSignOut = async () => {
@@ -37,8 +54,47 @@ export default function AcademyManagerLayout() {
     }
   }
 
+  const requestSignOut = () => {
+    setShowProfileMenu(false)
+    setPendingHref(null)
+    setConfirmKind('logout')
+  }
+
+  const handleLinkClickCapture = (event) => {
+    if (!isDirty) return
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+    const anchor = event.target.closest('a[href]')
+    if (!anchor || anchor.getAttribute('target') === '_blank') return
+    const href = anchor.getAttribute('href')
+    if (!href || href.startsWith('#')) return
+    if (sameLocation(pathname, search, href)) return
+    event.preventDefault()
+    event.stopPropagation()
+    setShowProfileMenu(false)
+    setPendingHref(href)
+    setConfirmKind('leave')
+  }
+
+  const closeConfirm = () => {
+    setConfirmKind(null)
+    setPendingHref(null)
+  }
+
+  const confirmLeave = () => {
+    const href = pendingHref
+    closeConfirm()
+    setDirty(false)
+    if (href) navigate(href)
+  }
+
+  const confirmLogout = async () => {
+    closeConfirm()
+    setDirty(false)
+    await handleSignOut()
+  }
+
   return (
-    <div className="flex min-h-screen flex-col bg-gray-100">
+    <div className="flex min-h-screen flex-col bg-gray-100" onClickCapture={handleLinkClickCapture}>
       <header className="w-full flex-shrink-0 border-b border-gray-200 bg-white shadow-sm">
         <div className="flex h-12 items-center justify-between px-6">
           <Link to="/" className="group flex items-center space-x-2">
@@ -71,7 +127,7 @@ export default function AcademyManagerLayout() {
               <div className="absolute right-0 z-50 mt-2 w-48 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
                 <button
                   type="button"
-                  onClick={handleSignOut}
+                  onClick={requestSignOut}
                   className="flex w-full items-center space-x-2 px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
                 >
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -123,6 +179,38 @@ export default function AcademyManagerLayout() {
           <Outlet />
         </main>
       </div>
+
+      {confirmKind === 'leave' ? (
+        <ConfirmDialog
+          title="Dikkat"
+          message={UNSAVED_CHANGES_MESSAGE}
+          confirmLabel="Evet"
+          cancelLabel="Hayır"
+          confirmClassName="bg-red-600 text-white hover:bg-red-700"
+          onCancel={closeConfirm}
+          onConfirm={confirmLeave}
+        />
+      ) : null}
+
+      {confirmKind === 'logout' ? (
+        <ConfirmDialog
+          title="Çıkış Yap"
+          message={isDirty ? UNSAVED_CHANGES_MESSAGE : 'Hesaptan çıkmak istediğinize emin misiniz?'}
+          confirmLabel="Evet"
+          cancelLabel="Hayır"
+          confirmClassName="bg-red-600 text-white hover:bg-red-700"
+          onCancel={closeConfirm}
+          onConfirm={confirmLogout}
+        />
+      ) : null}
     </div>
+  )
+}
+
+export default function AcademyManagerLayout() {
+  return (
+    <UnsavedChangesProvider>
+      <AcademyManagerShell />
+    </UnsavedChangesProvider>
   )
 }

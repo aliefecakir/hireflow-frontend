@@ -1,8 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Building2, GraduationCap } from 'lucide-react'
 import BrandMark from './BrandMark'
 import { getErrorMessage } from './api/client'
+import {
+  CAREER_PORTAL_SHORT_CODE,
+  findParameterByShortCode,
+  isCareerPortalEnabled,
+} from './api/parameters'
 import { supabase } from './supabaseClient'
 import { showToast } from './toast/ToastProvider'
 
@@ -60,7 +65,7 @@ function PortalHeader() {
             <rect x="1" y="12" width="10" height="10" fill="#00A4EF" />
             <rect x="12" y="12" width="10" height="10" fill="#FFB900" />
           </svg>
-          {loading ? 'Yönlendiriliyor...' : 'Çalışan Girişi'}
+          {loading ? 'Yönlendiriliyor...' : 'Kurumsal Giriş'}
         </button>
       </div>
     </header>
@@ -91,6 +96,36 @@ function PortalCard({ icon: Icon, title, description, note, buttonText, to }) {
 }
 
 export default function PortalSelection() {
+  const [careerVisible, setCareerVisible] = useState(true)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+
+    const loadPortalVisibility = async () => {
+      try {
+        const parameter = await findParameterByShortCode(CAREER_PORTAL_SHORT_CODE)
+        if (!cancelled) {
+          setCareerVisible(isCareerPortalEnabled(parameter))
+        }
+      } catch (error) {
+        console.error('Portal parametresi yüklenemedi:', error)
+        if (!cancelled) {
+          setCareerVisible(true)
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false)
+        }
+      }
+    }
+
+    loadPortalVisibility()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   return (
     <div className="flex min-h-screen flex-col bg-slate-50">
       <PortalHeader />
@@ -106,24 +141,33 @@ export default function PortalSelection() {
             </p>
           </div>
 
-          <div className="mt-12 grid gap-6 md:grid-cols-2">
-            <PortalCard
-              icon={Building2}
-              title="KARİYER"
-              description="Profesyonel açık iş ilanlarımıza başvurun ve sürecinizi izleyin."
-              note="(Kayıt Gerektirir)"
-              buttonText="Aday Girişi Yap"
-              to="/login"
-            />
-            <PortalCard
-              icon={GraduationCap}
-              title="AKADEMİ"
-              description="Geleceğin yetenekleri arasına katılmak için akademi programlarını keşfedin."
-              note="(Kayıt Gerektirmez)"
-              buttonText="İlanları Görüntüle"
-              to="/academy"
-            />
-          </div>
+          {loading ? (
+            <div className="mt-12 text-center">
+              <div className="mx-auto inline-block h-12 w-12 animate-spin rounded-full border-b-2 border-blue-700" />
+              <p className="mt-4 font-medium text-slate-600">Yükleniyor...</p>
+            </div>
+          ) : (
+            <div className={careerVisible ? 'mt-12 grid gap-6 md:grid-cols-2' : 'mx-auto mt-12 grid max-w-md'}>
+              {careerVisible ? (
+                <PortalCard
+                  icon={Building2}
+                  title="KARİYER"
+                  description="Profesyonel açık iş ilanlarımıza başvurun ve sürecinizi izleyin."
+                  note="(Kayıt Gerektirir)"
+                  buttonText="Aday Girişi Yap"
+                  to="/login"
+                />
+              ) : null}
+              <PortalCard
+                icon={GraduationCap}
+                title="AKADEMİ"
+                description="Geleceğin yetenekleri arasına katılmak için akademi programlarını keşfedin."
+                note="(Kayıt Gerektirmez)"
+                buttonText="İlanları Görüntüle"
+                to="/academy"
+              />
+            </div>
+          )}
         </div>
       </main>
     </div>

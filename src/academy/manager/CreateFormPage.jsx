@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { createForm, getFormDetail, updateForm } from '../api/forms'
-import { getQuestionId, normalizeQuestionTypes, toFlag } from '../api/helpers'
+import { getQuestionId, normalizeQuestionTypes, toFlag, toFormDateTimeApi } from '../api/helpers'
 import { createOrganization, getOrganizations, updateOrganization } from '../api/organizations'
 import { createQuestion, getQuestions, getQuestionTypes } from '../api/questions'
 import { getErrorMessage } from '../../shared/api/client'
@@ -60,7 +60,7 @@ export default function CreateFormPage() {
     }
   }, [formId, navigate])
 
-  // Create veya update; tarihler gün başı/sonu.
+  // Create veya update; seçilen tarih ve saat gönderilir.
   const handleSaveForm = async (payload) => {
     setSavingForm(true)
     try {
@@ -68,8 +68,8 @@ export default function CreateFormPage() {
         organizationId: Number(payload.organizationId),
         title: payload.title,
         descr: payload.descr || null,
-        sdate: `${payload.sdate}T00:00:00`,
-        edate: `${payload.edate}T23:59:59`,
+        sdate: toFormDateTimeApi(payload.sdate),
+        edate: toFormDateTimeApi(payload.edate),
         isActv: toFlag(payload.isActv),
         questions: payload.questions,
       }

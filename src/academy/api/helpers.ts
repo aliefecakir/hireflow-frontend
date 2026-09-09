@@ -242,6 +242,32 @@ export function getQuestionKind(
   return 'single'
 }
 
+function pad2(value: number): string {
+  return String(value).padStart(2, '0')
+}
+
+// datetime-local: YYYY-MM-DDTHH:mm (API/ISO değerinden, saat dilimi kaydırmadan).
+export function toFormDateTimeInput(value: unknown): string {
+  if (!value) return ''
+  const text = String(value).trim()
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(text)) return text.slice(0, 16)
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return `${text.slice(0, 10)}T00:00`
+  const parsed = parseFormDate(text)
+  if (!parsed) return ''
+  return `${parsed.getFullYear()}-${pad2(parsed.getMonth() + 1)}-${pad2(parsed.getDate())}T${pad2(parsed.getHours())}:${pad2(parsed.getMinutes())}`
+}
+
+// API'ye YYYY-MM-DDTHH:mm:ss.
+export function toFormDateTimeApi(value: unknown): string {
+  if (!value) return ''
+  const text = String(value).trim()
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(text)) return text.slice(0, 19)
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(text)) return `${text}:00`
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return `${text}T00:00:00`
+  const input = toFormDateTimeInput(text)
+  return input ? `${input}:00` : ''
+}
+
 // Form tarihleri: süresi doldu mu, başladı mı, adaya açık mı.
 export function parseFormDate(value: unknown): Date | null {
   if (!value) return null

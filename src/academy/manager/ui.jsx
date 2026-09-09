@@ -6,11 +6,6 @@ import { DEFAULT_PAGE_SIZE, KIND_LABELS, PAGE_SIZE_OPTIONS, isFlagOn } from '../
 export const inputClass =
   'w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500'
 
-export function toDateInput(value) {
-  if (!value) return ''
-  return String(value).slice(0, 10)
-}
-
 // Forma bağlı soru map: sıra, üste ekle, sürükle.
 export function renumberAttachments(map) {
   const rows = Object.values(map).sort((a, b) => Number(a.ordNo) - Number(b.ordNo))
@@ -55,10 +50,12 @@ export function formatDate(value) {
   if (!value) return '—'
   const parsed = new Date(value)
   if (Number.isNaN(parsed.getTime())) return '—'
-  return parsed.toLocaleDateString('tr-TR', {
+  return parsed.toLocaleString('tr-TR', {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
   })
 }
 

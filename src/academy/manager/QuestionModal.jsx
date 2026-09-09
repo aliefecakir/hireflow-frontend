@@ -290,7 +290,7 @@ export default function QuestionModal({
               {isEditMode
                 ? (canEditContent
                   ? 'Soru hiçbir formda ve cevapta kullanılmıyor, tüm alanları değiştirebilirsiniz.'
-                  : 'Soru kullanımda. Yeni şık ekleyebilir ve puanları değiştirebilirsiniz; mevcut şık metinleri kilitlidir.')
+                  : 'Soru kullanımda. Yeni şık ekleyebilir ve puanları değiştirebilirsiniz.')
                 : 'Soru başlığı oluşturun, soru tipini seçin ve şıkları ekleyin.'
               }
             </p>

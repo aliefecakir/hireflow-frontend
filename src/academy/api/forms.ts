@@ -11,6 +11,7 @@ export interface AcademyForm {
   isActv?: number | boolean | null
   sdate: string
   edate: string
+  applicationCount?: number | null
 }
 
 export interface FormQuestion {

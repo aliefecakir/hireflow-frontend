@@ -9,12 +9,14 @@ import {
   isFormExpired,
   KIND_LABELS,
   toFlag,
+  toFormDateTimeInput,
 } from '../api/helpers'
-import { CompactCategoryFilter, ConfirmDialog, inputClass, paginateRows, prependAttachment, PurposeBadge, renumberAttachments, reorderAttachments, Switch, TablePager, toDateInput, TypeBadge } from './ui'
+import { CompactCategoryFilter, ConfirmDialog, inputClass, paginateRows, prependAttachment, PurposeBadge, renumberAttachments, reorderAttachments, Switch, TablePager, TypeBadge } from './ui'
 import OrganizationModal from './OrganizationModal'
 import OrganizationDetailsModal from './OrganizationDetailsModal'
 import QuestionModal from './QuestionModal'
 import { showToast } from '../../shared/toast/ToastProvider'
+import { UNSAVED_CHANGES_MESSAGE, useRegisterUnsavedChanges } from './UnsavedChangesContext'
 
 const EMPTY_FORM = {
   title: '',
@@ -75,9 +77,20 @@ export default function CreateFormView({
   const [dragQuestionId, setDragQuestionId] = useState(null)
   const [confirmAction, setConfirmAction] = useState(null)
   const baselineRef = useRef(snapshotForm(EMPTY_FORM, {}, true))
-  const selectedOrganizationId = formData.organizationId || organizations[0]?.id || ''
+  const selectedOrganizationId = formData.organizationId || ''
   const isEditing = Boolean(editingForm?.formId)
   const isDirty = snapshotForm(formData, attachments, isActv) !== baselineRef.current
+  useRegisterUnsavedChanges(isDirty)
+
+  useEffect(() => {
+    if (!isDirty) return undefined
+    const onBeforeUnload = (event) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [isDirty])
 
   // Edit: formu ve attachments'ı doldur; süresi geçmişse pasif.
   useEffect(() => {
@@ -93,8 +106,8 @@ export default function CreateFormView({
       title: editingForm.title || '',
       descr: editingForm.descr || '',
       organizationId: editingForm.organizationId || '',
-      sdate: toDateInput(editingForm.sdate),
-      edate: toDateInput(editingForm.edate),
+      sdate: toFormDateTimeInput(editingForm.sdate),
+      edate: toFormDateTimeInput(editingForm.edate),
     }
     const nextActvRaw = editingForm.isActv == null ? true : isFlagOn(editingForm.isActv)
     const nextActv = isFormExpired({ edate: editingForm.edate || nextForm.edate }) ? false : nextActvRaw
@@ -116,7 +129,7 @@ export default function CreateFormView({
   }, [editingForm])
 
   const endDatePassed = isFormExpired({
-    edate: formData.edate ? `${formData.edate}T23:59:59` : null,
+    edate: formData.edate || null,
   })
 
   useEffect(() => {
@@ -162,7 +175,7 @@ export default function CreateFormView({
     const { name, value } = event.target
     setFormData((prev) => ({
       ...prev,
-      [name]: name === 'organizationId' ? Number(value) : value,
+      [name]: name === 'organizationId' ? (value === '' ? '' : Number(value)) : value,
     }))
   }
 
@@ -276,6 +289,14 @@ export default function CreateFormView({
                 </select>
                 <button
                   type="button"
+                  onClick={() => setShowOrgModal(true)}
+                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-blue-700 shadow-sm ring-1 ring-slate-200 transition-colors hover:bg-blue-50"
+                >
+                  <Plus className="h-4 w-4" />
+                  Yeni Organizasyon
+                </button>
+                <button
+                  type="button"
                   onClick={() => {
                     setShowOrgDetails(true)
                     onOpenOrganizationDetails?.()
@@ -283,39 +304,33 @@ export default function CreateFormView({
                   className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 transition-colors hover:bg-slate-50"
                 >
                   <List className="h-4 w-4" />
-                  Organizasyon detayı
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowOrgModal(true)}
-                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-blue-700 shadow-sm ring-1 ring-slate-200 transition-colors hover:bg-blue-50"
-                >
-                  <Plus className="h-4 w-4" />
-                  Yeni Organizasyon
+                  Organizasyon Detayı
                 </button>
               </div>
             </div>
 
             <label className="block text-sm font-medium text-slate-700">
-              Başlangıç Tarihi
+              Başlangıç Tarihi ve Saati
               <input
-                type="date"
+                type="datetime-local"
                 name="sdate"
                 required
                 value={formData.sdate}
                 onChange={handleChange}
+                max={formData.edate || undefined}
                 className={`mt-2 ${inputClass}`}
               />
             </label>
 
             <label className="block text-sm font-medium text-slate-700">
-              Bitiş Tarihi
+              Bitiş Tarihi ve Saati
               <input
-                type="date"
+                type="datetime-local"
                 name="edate"
                 required
                 value={formData.edate}
                 onChange={handleChange}
+                min={formData.sdate || undefined}
                 className={`mt-2 ${inputClass}`}
               />
             </label>
@@ -329,7 +344,7 @@ export default function CreateFormView({
               />
               {endDatePassed ? (
                 <p className="mt-2 text-xs text-slate-500">
-                  Bitiş tarihi geçen formlar otomatik olarak pasife alınır ve aday listesinde görünmez.
+                  Bitiş tarihi ve saati geçen formlar otomatik olarak pasife alınır ve aday listesinde görünmez.
                 </p>
               ) : null}
             </div>
@@ -581,7 +596,7 @@ export default function CreateFormView({
       {confirmAction === 'cancel' ? (
         <ConfirmDialog
           title="İptal"
-          message="Yapılan değişiklikler iptal edilecektir. Emin misiniz?"
+          message={UNSAVED_CHANGES_MESSAGE}
           confirmLabel="Evet"
           cancelLabel="Hayır"
           confirmClassName="bg-red-600 text-white hover:bg-red-700"

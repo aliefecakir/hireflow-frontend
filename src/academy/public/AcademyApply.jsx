@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, GraduationCap, Upload } from 'lucide-react'
 import PhoneInput, { isValidPhoneNumber } from 'react-phone-number-input'
 import 'react-phone-number-input/style.css'
+import { getDepartments, getUniversities } from '../api/catalog'
 import {
   applyToForm,
   getFormQuestions,
@@ -31,19 +32,34 @@ const inputClass =
 const ACADEMY_CV_BUCKET = 'academy-files'
 const MAX_CV_BYTES = 5 * 1024 * 1024
 
-// PDF CV → Supabase academy-files, public URL döner.
-async function uploadAcademyCv(formId, file) {
+function isPdfFileName(name) {
+  return String(name || '').toLowerCase().endsWith('.pdf')
+}
+
+async function assertAcademyCvFile(file) {
   if (!file) {
     throw new Error('Lütfen bir CV dosyası seçin.')
   }
-  const isPdf = (file.type || '').toLowerCase() === 'application/pdf'
-    || String(file.name || '').toLowerCase().endsWith('.pdf')
-  if (!isPdf) {
-    throw new Error('Lütfen PDF formatında bir CV yükleyin.')
+  if (!isPdfFileName(file.name)) {
+    throw new Error('Yalnızca PDF dosyası yüklenebilir.')
+  }
+  const type = (file.type || '').toLowerCase()
+  if (type && type !== 'application/pdf') {
+    throw new Error('Yalnızca PDF dosyası yüklenebilir.')
   }
   if (file.size > MAX_CV_BYTES) {
     throw new Error('CV en fazla 5 MB olabilir.')
   }
+  const header = new Uint8Array(await file.slice(0, 5).arrayBuffer())
+  const signature = String.fromCharCode(...header)
+  if (!signature.startsWith('%PDF')) {
+    throw new Error('Yalnızca PDF dosyası yüklenebilir.')
+  }
+}
+
+// PDF CV → Supabase academy-files, public URL döner.
+async function uploadAcademyCv(formId, file) {
+  await assertAcademyCvFile(file)
 
   const unique = `${Date.now()}-${Math.random().toString(16).slice(2)}`
   const path = `academy/${formId}/${unique}.pdf`
@@ -98,10 +114,12 @@ function formatDate(value) {
   if (!value) return '—'
   const parsed = new Date(value)
   if (Number.isNaN(parsed.getTime())) return '—'
-  return parsed.toLocaleDateString('tr-TR', {
+  return parsed.toLocaleString('tr-TR', {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
   })
 }
 
@@ -112,28 +130,6 @@ function LoadingState({ label = 'Yükleniyor...' }) {
       <p className="mt-4 font-medium text-slate-600">{label}</p>
     </div>
   )
-}
-
-// Supabase UNIVERSITY / DEPARTMENT satırını {id, name} yapar.
-function pickField(row, keys) {
-  if (!row) return undefined
-  for (const key of keys) {
-    if (row[key] != null && row[key] !== '') return row[key]
-  }
-  return undefined
-}
-
-function normalizeLookup(row, idKeys, nameKeys) {
-  const id = pickField(row, idKeys)
-  const name = pickField(row, nameKeys)
-  if (id == null || !name) return null
-  return { id: Number(id), name: String(name) }
-}
-
-async function fetchLookup(table, idKeys, nameKeys) {
-  const { data, error } = await supabase.from(table).select('*')
-  if (error || !Array.isArray(data)) return []
-  return data.map((row) => normalizeLookup(row, idKeys, nameKeys)).filter(Boolean)
 }
 
 function sortQuestions(questions) {
@@ -179,8 +175,8 @@ export default function AcademyApply() {
         const [formQuestions, forms, universityRows, departmentRows, typeRows] = await Promise.all([
           getFormQuestions(formId).catch(() => null),
           getForms().catch(() => []),
-          fetchLookup('UNIVERSITY', ['UNIVERSITY_ID', 'universityId', 'id'], ['NAME', 'name']).catch(() => []),
-          fetchLookup('DEPARTMENT', ['DEPARTMENT_ID', 'departmentId', 'id'], ['NAME', 'name']).catch(() => []),
+          getUniversities().catch(() => []),
+          getDepartments().catch(() => []),
           getQuestionTypes().then(normalizeQuestionTypes).catch(() => []),
         ])
 
@@ -336,8 +332,16 @@ export default function AcademyApply() {
   }
 
   // PDF yükle, URL'i cevap olarak tut.
-  const handleCvSelect = async (questionId, file) => {
+  const handleCvSelect = async (questionId, file, input) => {
     if (!file) return
+    try {
+      await assertAcademyCvFile(file)
+    } catch (error) {
+      if (input) input.value = ''
+      showToast.error('Hata Oluştu', error.message || 'Geçersiz CV dosyası.')
+      return
+    }
+
     setAnswerField(questionId, 'fileName', file.name)
     setAnswerField(questionId, 'uploading', true)
     setAnswerField(questionId, 'text', '')
@@ -354,7 +358,10 @@ export default function AcademyApply() {
       }))
     } catch (error) {
       console.error('CV yüklenemedi:', error)
+      if (input) input.value = ''
+      setAnswerField(questionId, 'fileName', '')
       setAnswerField(questionId, 'uploading', false)
+      setAnswerField(questionId, 'text', '')
       showToast.error('Hata Oluştu', getErrorMessage(error) || error.message || 'CV yüklenirken bir hata oluştu.')
     }
   }
@@ -444,7 +451,7 @@ export default function AcademyApply() {
             <h1 className="mt-6 text-2xl font-bold text-slate-900">{formTitle}</h1>
             {applyState === 'upcoming' ? (
               <p className="mt-2 text-sm text-slate-500">
-                Başvurular {formatDate(currentForm?.sdate)} tarihinde başlayacak.
+                Başvurular {formatDate(currentForm?.sdate)} itibarıyla başlayacak.
                 Bu tarihten önce forma başvurulamaz.
               </p>
             ) : (
@@ -521,6 +528,7 @@ export default function AcademyApply() {
                         inputMode: 'tel',
                         autoComplete: 'tel',
                         className: 'PhoneInputInput',
+                        maxLength: 17,
                       }}
                       className={`PhoneInput ${phoneError ? 'PhoneInput--error' : ''}`}
                       placeholder="5XX XXX XX XX"
@@ -605,7 +613,10 @@ export default function AcademyApply() {
                               type="file"
                               accept="application/pdf,.pdf"
                               required={isFlagOn(question.isReq) && !current.text}
-                              onChange={(event) => handleCvSelect(question.questionId, event.target.files?.[0])}
+                              onChange={(event) => {
+                                const input = event.currentTarget
+                                handleCvSelect(question.questionId, input.files?.[0], input)
+                              }}
                               className="text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-blue-600 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-white hover:file:bg-blue-700"
                             />
                           </label>

@@ -199,10 +199,9 @@ export default function QuestionPoolView({ questions, questionTypes, onAddQuesti
                           <li key={getChoiceId(choice)} className="flex items-center justify-between text-sm text-slate-600">
                             <span>
                               {choice.ordNo}. {choice.choiceText}
-                              {isFlagOn(choice.isOther) ? ' (Diğer)' : ''}
                             </span>
                             <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
-                              {isFlagOn(choice.isOther) ? `max ${choice.score} puan` : `${choice.score} puan`}
+                              {isFlagOn(choice.isOther) ? `${choice.score} Max puan` : `${choice.score} puan`}
                             </span>
                           </li>
                         ))}
