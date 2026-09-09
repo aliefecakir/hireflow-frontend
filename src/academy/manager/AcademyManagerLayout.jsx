@@ -1,9 +1,11 @@
 // Yönetici kabuğu: header, menü, Outlet.
 import { useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { CircleHelp, ClipboardList, FilePlus } from 'lucide-react'
+import { CircleHelp, ClipboardList, FilePlus, Shield } from 'lucide-react'
 import BrandMark from '../../shared/BrandMark'
 import { useAuth } from '../../shared/AuthContext'
+import { usePermissions } from '../../shared/usePermissions'
+import { ACADEMY_ADMIN_ROLES, ACADEMY_WRITE_ROLES, hasAnyRole } from '../../shared/api/auth'
 import { ConfirmDialog, displayName } from './ui'
 import {
   UNSAVED_CHANGES_MESSAGE,
@@ -13,17 +15,20 @@ import {
 
 const MENU_ITEMS = [
   { id: 'forms', label: 'Formlar', hint: 'Ana Sayfa', icon: ClipboardList, to: '/academy/manager/forms' },
-  { id: 'create', label: 'Form Oluştur', icon: FilePlus, to: '/academy/manager/create' },
-  { id: 'pool', label: 'Soru Havuzu', icon: CircleHelp, to: '/academy/manager/pool' },
+  { id: 'create', label: 'Form Oluştur', icon: FilePlus, to: '/academy/manager/create', roles: ACADEMY_WRITE_ROLES },
+  { id: 'pool', label: 'Soru Havuzu', icon: CircleHelp, to: '/academy/manager/pool', roles: ACADEMY_WRITE_ROLES },
+  { id: 'admin', label: 'Admin Paneli', icon: Shield, to: '/academy/manager/admin', roles: ACADEMY_ADMIN_ROLES, pin: 'bottom' },
 ]
 
-// create/edit aynı menü; pool ayrı; geri kalan forms.
+// create/edit aynı menü; pool ayrı; admin ayrı; geri kalan forms.
 function isMenuActive(itemId, pathname) {
   const createActive = pathname.endsWith('/create') || /\/forms\/[^/]+\/edit$/.test(pathname)
   const poolActive = pathname.endsWith('/pool')
+  const adminActive = pathname.endsWith('/admin')
   if (itemId === 'create') return createActive
   if (itemId === 'pool') return poolActive
-  return !createActive && !poolActive
+  if (itemId === 'admin') return adminActive
+  return !createActive && !poolActive && !adminActive
 }
 
 function sameLocation(pathname, search, href) {
@@ -35,15 +40,43 @@ function sameLocation(pathname, search, href) {
   }
 }
 
+function MenuLink({ item, pathname }) {
+  const Icon = item.icon
+  const isActive = isMenuActive(item.id, pathname)
+  return (
+    <NavLink
+      to={item.to}
+      className={`flex w-full items-center space-x-3 rounded-lg px-4 py-3 text-left text-sm font-medium transition-all duration-200 ${
+        isActive
+          ? 'bg-blue-50 text-blue-700 shadow-sm'
+          : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+      }`}
+    >
+      <Icon className={`h-5 w-5 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
+      <span>
+        {item.label}
+        {item.hint ? (
+          <span className="ml-1 text-xs font-normal text-slate-400">({item.hint})</span>
+        ) : null}
+      </span>
+    </NavLink>
+  )
+}
+
 function AcademyManagerShell() {
   const navigate = useNavigate()
   const { pathname, search } = useLocation()
-  const { userProfile, signOut } = useAuth()
+  const { userProfile, jobTitle, photoUrl, signOut } = useAuth()
+  const { roles, roleLabel } = usePermissions()
   const { isDirty, setDirty } = useUnsavedChanges()
   const [showProfileMenu, setShowProfileMenu] = useState(false)
   const [confirmKind, setConfirmKind] = useState(null)
   const [pendingHref, setPendingHref] = useState(null)
   const userName = displayName(userProfile)
+  const visibleItems = MENU_ITEMS.filter((item) => !item.roles || hasAnyRole(roles, item.roles))
+  const primaryItems = visibleItems.filter((item) => item.pin !== 'bottom')
+  const bottomItems = visibleItems.filter((item) => item.pin === 'bottom')
+  const headerRole = jobTitle || roleLabel || 'Akademi'
 
   const handleSignOut = async () => {
     try {
@@ -108,15 +141,19 @@ function AcademyManagerShell() {
               className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-slate-50"
               onClick={() => setShowProfileMenu((open) => !open)}
             >
-              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-sm">
-                <span className="text-xs font-semibold text-white">
-                  {(userName.charAt(0) || 'A').toUpperCase()}
-                </span>
+              <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-sm">
+                {photoUrl ? (
+                  <img src={photoUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <span className="text-xs font-semibold text-white">
+                    {(userName.charAt(0) || 'A').toUpperCase()}
+                  </span>
+                )}
               </div>
               <div className="flex flex-col leading-tight">
-                <span className="text-[11px] text-slate-500">Akademi Yöneticisi</span>
+                <span className="text-[11px] text-slate-500">{headerRole}</span>
                 <span className="text-sm font-medium text-slate-800">
-                  {userName || 'Akademi Yöneticisi'}
+                  {userName || headerRole}
                 </span>
               </div>
               <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -142,35 +179,24 @@ function AcademyManagerShell() {
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Formlar / Form Oluştur / Soru Havuzu */}
-        <aside className="w-60 flex-shrink-0 overflow-y-auto border-r border-gray-200 bg-white">
-          <nav className="p-4">
+        <aside className="flex w-60 flex-shrink-0 flex-col overflow-y-auto border-r border-gray-200 bg-white">
+          <nav className="flex flex-1 flex-col p-4">
             <ul className="space-y-1">
-              {MENU_ITEMS.map((item) => {
-                const Icon = item.icon
-                const isActive = isMenuActive(item.id, pathname)
-                return (
-                  <li key={item.id}>
-                    <NavLink
-                      to={item.to}
-                      className={`flex w-full items-center space-x-3 rounded-lg px-4 py-3 text-left text-sm font-medium transition-all duration-200 ${
-                        isActive
-                          ? 'bg-blue-50 text-blue-700 shadow-sm'
-                          : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                      }`}
-                    >
-                      <Icon className={`h-5 w-5 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
-                      <span>
-                        {item.label}
-                        {item.hint ? (
-                          <span className="ml-1 text-xs font-normal text-slate-400">({item.hint})</span>
-                        ) : null}
-                      </span>
-                    </NavLink>
-                  </li>
-                )
-              })}
+              {primaryItems.map((item) => (
+                <li key={item.id}>
+                  <MenuLink item={item} pathname={pathname} />
+                </li>
+              ))}
             </ul>
+            {bottomItems.length > 0 ? (
+              <ul className="mt-auto space-y-1 border-t border-slate-200 pt-3">
+                {bottomItems.map((item) => (
+                  <li key={item.id}>
+                    <MenuLink item={item} pathname={pathname} />
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </nav>
         </aside>
 

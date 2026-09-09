@@ -10,7 +10,7 @@ function displayName(profile) {
 
 export default function HRLayout() {
   const [showProfileMenu, setShowProfileMenu] = useState(false)
-  const { signOut, userProfile } = useAuth()
+  const { signOut, userProfile, jobTitle, photoUrl } = useAuth()
   const navigate = useNavigate()
   const userName = displayName(userProfile)
 
@@ -64,15 +64,19 @@ export default function HRLayout() {
               onClick={() => setShowProfileMenu(!showProfileMenu)}
             >
               {/* Profile Picture */}
-              <div className="w-7 h-7 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-full flex items-center justify-center shadow-sm">
-                <span className="text-white font-semibold text-xs">
-                  {(userName.charAt(0) || 'H').toUpperCase()}
-                </span>
+              <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-sm">
+                {photoUrl ? (
+                  <img src={photoUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <span className="text-white font-semibold text-xs">
+                    {(userName.charAt(0) || 'H').toUpperCase()}
+                  </span>
+                )}
               </div>
               
               {/* Welcome Text */}
               <div className="flex flex-col leading-tight">
-                <span className="text-[11px] text-slate-500">İnsan Kaynakları</span>
+                <span className="text-[11px] text-slate-500">{jobTitle || 'İnsan Kaynakları'}</span>
                 <span className="text-sm font-medium text-slate-800">
                   {userName || 'İnsan Kaynakları'}
                 </span>

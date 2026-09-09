@@ -21,6 +21,7 @@ import {
   statusBadgeClass,
   TablePager,
 } from './ui'
+import { usePermissions } from '../../shared/usePermissions'
 
 const FILTER_FIELDS = [
   { id: 'fullName', label: 'Ad-Soyad' },
@@ -52,6 +53,7 @@ export default function ApplicationListPage() {
   const { formId } = useParams()
   const location = useLocation()
   const navigate = useNavigate()
+  const { canWriteAcademy } = usePermissions()
   const [form, setForm] = useState(location.state?.form || null)
   const [applications, setApplications] = useState([])
   const [page, setPage] = useState(1)
@@ -341,17 +343,25 @@ export default function ApplicationListPage() {
                               </span>
                             </td>
                             <td className="px-5 py-4">
-                              <button
-                                type="button"
-                                onClick={() => setStatusApp(row)}
-                                title="Durumu düzenle"
-                              >
+                              {canWriteAcademy ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setStatusApp(row)}
+                                  title="Durumu düzenle"
+                                >
+                                  <span
+                                    className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium transition hover:brightness-95 ${statusBadgeClass(statusLabel)}`}
+                                  >
+                                    {statusLabel}
+                                  </span>
+                                </button>
+                              ) : (
                                 <span
-                                  className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium transition hover:brightness-95 ${statusBadgeClass(statusLabel)}`}
+                                  className={`inline-flex cursor-default rounded-full border px-2.5 py-1 text-xs font-medium ${statusBadgeClass(statusLabel)}`}
                                 >
                                   {statusLabel}
                                 </span>
-                              </button>
+                              )}
                             </td>
                             <td className="px-5 py-4 text-right">
                               <div className="inline-flex items-center justify-end gap-2">
@@ -363,14 +373,16 @@ export default function ApplicationListPage() {
                                   <Eye className="h-4 w-4" />
                                   Görüntüle
                                 </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setEvaluation({ appId: row.academyAppId, readOnly: false })}
-                                  className="inline-flex items-center gap-2 rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-orange-600"
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                  Değerlendir
-                                </button>
+                                {canWriteAcademy ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setEvaluation({ appId: row.academyAppId, readOnly: false })}
+                                    className="inline-flex items-center gap-2 rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-orange-600"
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                    Değerlendir
+                                  </button>
+                                ) : null}
                               </div>
                             </td>
                           </tr>
@@ -396,7 +408,7 @@ export default function ApplicationListPage() {
       </div>
 
       {/* Durum güncelle / görüntüle veya değerlendir */}
-      {statusApp ? (
+      {statusApp && canWriteAcademy ? (
         <StatusModal
           application={statusApp}
           statuses={statuses}
@@ -412,7 +424,7 @@ export default function ApplicationListPage() {
         <EvaluationModal
           key={`${evaluation.appId}-${evaluation.readOnly ? 'view' : 'edit'}`}
           appId={evaluation.appId}
-          readOnly={evaluation.readOnly}
+          readOnly={evaluation.readOnly || !canWriteAcademy}
           statuses={statuses}
           onClose={() => setEvaluation(null)}
           onSaved={() => setRefreshKey((value) => value + 1)}

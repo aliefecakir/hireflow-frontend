@@ -33,7 +33,7 @@ function PortalHeader() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'azure',
         options: {
-          scopes: 'email profile',
+          scopes: 'email profile openid User.Read',
           redirectTo: `${window.location.origin}/login`,
         },
       })

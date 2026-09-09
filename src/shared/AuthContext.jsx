@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { fetchCurrentUserProfile } from './api/auth'
-import { getErrorMessage, getFreshSession, setAccessToken } from './api/client'
+import { getAccessToken, getErrorMessage, getFreshSession, setAccessToken } from './api/client'
+import { fetchMicrosoftJobTitle, fetchMicrosoftPhotoUrl } from './api/microsoft'
 import { supabase } from './supabaseClient'
 
 const AuthContext = createContext({})
@@ -18,9 +19,20 @@ export const AuthProvider = ({ children }) => {
   const [session, setSession] = useState(null)
   const [userProfile, setUserProfile] = useState(null)
   const [userRole, setUserRole] = useState(null)
+  const [jobTitle, setJobTitle] = useState(null)
+  const [photoUrl, setPhotoUrl] = useState(null)
   const [profileError, setProfileError] = useState(null)
   const [loading, setLoading] = useState(true)
   const profileLoadedRef = useRef(false)
+  const photoUrlRef = useRef(null)
+
+  const replacePhotoUrl = (nextUrl) => {
+    if (photoUrlRef.current && photoUrlRef.current !== nextUrl) {
+      URL.revokeObjectURL(photoUrlRef.current)
+    }
+    photoUrlRef.current = nextUrl
+    setPhotoUrl(nextUrl)
+  }
 
   const clearAuthState = () => {
     profileLoadedRef.current = false
@@ -29,6 +41,8 @@ export const AuthProvider = ({ children }) => {
     setUser(null)
     setUserProfile(null)
     setUserRole(null)
+    setJobTitle(null)
+    replacePhotoUrl(null)
     setProfileError(null)
   }
 
@@ -72,6 +86,8 @@ export const AuthProvider = ({ children }) => {
         setUser(null)
         setUserProfile(null)
         setUserRole(null)
+        setJobTitle(null)
+        replacePhotoUrl(null)
         setLoading(false)
         return
       }
@@ -97,7 +113,19 @@ export const AuthProvider = ({ children }) => {
         event === 'SIGNED_IN'
 
       if (shouldReloadProfile) {
-        await loadUserProfile(currentSession.access_token)
+        await Promise.all([
+          loadUserProfile(currentSession.access_token),
+          fetchMicrosoftJobTitle(currentSession.provider_token).then((title) => {
+            if (isMounted) setJobTitle(title)
+          }),
+          fetchMicrosoftPhotoUrl(currentSession.provider_token).then((url) => {
+            if (!isMounted) {
+              if (url) URL.revokeObjectURL(url)
+              return
+            }
+            replacePhotoUrl(url)
+          }),
+        ])
       }
 
       if (isMounted) {
@@ -138,6 +166,10 @@ export const AuthProvider = ({ children }) => {
     return () => {
       isMounted = false
       subscription.unsubscribe()
+      if (photoUrlRef.current) {
+        URL.revokeObjectURL(photoUrlRef.current)
+        photoUrlRef.current = null
+      }
     }
   }, [])
 
@@ -151,14 +183,23 @@ export const AuthProvider = ({ children }) => {
     }
   }
 
+  const reloadUserProfile = async () => {
+    const token = await getAccessToken()
+    if (!token) return
+    await loadUserProfile(token)
+  }
+
   const value = {
     user,
     session,
     userProfile,
     userRole,
+    jobTitle,
+    photoUrl,
     profileError,
     loading,
     signOut,
+    reloadUserProfile,
   }
 
   return (

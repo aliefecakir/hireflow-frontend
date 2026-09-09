@@ -251,7 +251,7 @@ export function TablePager({ page, size, total, onPageChange, onSizeChange, disa
         </select>
       </label>
       <p className="text-sm text-slate-600">
-        {totalCount === 0 ? 'Kayıt yok' : `${start}–${end} / ${totalCount} kayıt`}
+        {totalCount === 0 ? 'Kayıt yok' : `${start}–${end} / ${totalCount} Kayıt`}
       </p>
       <div className="flex items-center gap-1">
         <button

@@ -8,9 +8,11 @@ import { isFormVisibleToCandidates } from '../api/helpers'
 import { getErrorMessage } from '../../shared/api/client'
 import { showToast } from '../../shared/toast/ToastProvider'
 import { formatDate, inputClass, LoadingState } from './ui'
+import { usePermissions } from '../../shared/usePermissions'
 
 export default function FormListPage() {
   const navigate = useNavigate()
+  const { canWriteAcademy } = usePermissions()
   const [forms, setForms] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -105,7 +107,7 @@ export default function FormListPage() {
             return (
               <div
                 key={form.formId}
-                className="group cursor-pointer overflow-hidden rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg"
+                className="group flex h-full cursor-pointer flex-col overflow-hidden rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg"
                 onClick={() => navigate(`/academy/manager/forms/${form.formId}/applications`, { state: { form } })}
               >
                 <div className="flex items-start justify-between gap-3">
@@ -113,24 +115,19 @@ export default function FormListPage() {
                     {form.title}
                   </h2>
                   <div className="flex shrink-0 items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        navigate(`/academy/manager/forms/${form.formId}/edit`)
-                      }}
-                      className="inline-flex h-7 w-7 items-center justify-center rounded-full text-slate-500 opacity-0 transition-all hover:bg-blue-50 hover:text-blue-700 group-hover:opacity-100"
-                      aria-label="Düzenle"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                    <span
-                      className="inline-flex items-center gap-1 text-xs font-medium text-slate-600"
-                      aria-label={`${countLabel} başvuru`}
-                    >
-                      <User className="h-3.5 w-3.5" />
-                      {countLabel}
-                    </span>
+                    {canWriteAcademy ? (
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          navigate(`/academy/manager/forms/${form.formId}/edit`)
+                        }}
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-full text-slate-500 opacity-0 transition-all hover:bg-blue-50 hover:text-blue-700 group-hover:opacity-100"
+                        aria-label="Düzenle"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                    ) : null}
                     <span
                       className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${
                         active
@@ -145,10 +142,17 @@ export default function FormListPage() {
                 {form.organizationName ? (
                   <p className="mt-2 line-clamp-2 text-sm text-slate-500">{form.organizationName}</p>
                 ) : null}
-                <div className="mt-5">
+                <div className="mt-auto flex items-end justify-between gap-3 pt-5">
                   <span className="inline-flex items-center gap-2 text-sm text-slate-600">
                     <CalendarRange className="h-4 w-4 text-orange-500" />
                     {formatDate(form.sdate)} – {formatDate(form.edate)}
+                  </span>
+                  <span
+                    className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-slate-600"
+                    aria-label={`${countLabel} başvuru`}
+                  >
+                    <User className="h-3.5 w-3.5" />
+                    {countLabel}
                   </span>
                 </div>
               </div>

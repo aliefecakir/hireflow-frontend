@@ -11,6 +11,8 @@ let currentAccessToken: string | null = null
 type AuthSession = {
   access_token?: string
   refresh_token?: string
+  provider_token?: string
+  provider_refresh_token?: string
   expires_at?: number
   user?: unknown
 } | null
@@ -95,6 +97,12 @@ export async function getFreshSession(options: { clearInvalid?: boolean } = {}):
   const { data, error } = await supabase.auth.refreshSession()
   if (!error && data.session && isSessionFresh(data.session)) {
     setAccessToken(data.session.access_token)
+    if (!data.session.provider_token && session.provider_token) {
+      data.session.provider_token = session.provider_token
+    }
+    if (!data.session.provider_refresh_token && session.provider_refresh_token) {
+      data.session.provider_refresh_token = session.provider_refresh_token
+    }
     return data.session
   }
 

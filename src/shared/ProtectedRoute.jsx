@@ -1,9 +1,10 @@
 import { Navigate } from 'react-router-dom'
-import { resolveHomeRoute } from './api/auth'
+import { ACADEMY_MANAGER_HOME, collectRoles, hasAllowedRole, resolveHomeRoute } from './api/auth'
 import { useAuth } from './AuthContext'
 
 export default function ProtectedRoute({ children, allowedRoles }) {
   const { user, userRole, userProfile, loading } = useAuth()
+  const ownedRoles = collectRoles(userRole, userProfile?.roles)
 
   if (loading) {
     return (
@@ -20,7 +21,7 @@ export default function ProtectedRoute({ children, allowedRoles }) {
     return <Navigate to="/login" replace />
   }
 
-  if (!userRole) {
+  if (ownedRoles.length === 0) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="text-center max-w-md p-6">
@@ -36,8 +37,18 @@ export default function ProtectedRoute({ children, allowedRoles }) {
     )
   }
 
-  if (allowedRoles && !allowedRoles.includes(userRole)) {
+  if (!hasAllowedRole(userRole, userProfile?.roles, allowedRoles)) {
     const redirectTo = resolveHomeRoute(userRole, userProfile?.roles) || '/login'
+    return <Navigate to={redirectTo} replace />
+  }
+
+  return children
+}
+
+export function RoleGuard({ allowedRoles, children, redirectTo = ACADEMY_MANAGER_HOME }) {
+  const { userRole, userProfile } = useAuth()
+
+  if (!hasAllowedRole(userRole, userProfile?.roles, allowedRoles)) {
     return <Navigate to={redirectTo} replace />
   }
 
