@@ -26,6 +26,7 @@ import CandidateApplications from './hire/CandidateApplications'
 import HRLayout from './hire/HRLayout'
 import HRJobs from './hire/HRJobs'
 import HRApplications from './hire/HRApplications'
+import AppVersion from './shared/AppVersion'
 
 export default function App() {
   return (
@@ -109,6 +110,7 @@ export default function App() {
           <Route path="/manager" element={<Navigate to="/academy/manager" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        <AppVersion />
       </AuthProvider>
     </ToastProvider>
   )

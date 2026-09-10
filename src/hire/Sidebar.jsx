@@ -2,9 +2,8 @@ import { NavLink } from 'react-router-dom'
 
 export default function Sidebar({ menuItems }) {
   return (
-    <aside className="w-60 bg-white border-r border-gray-200 flex-shrink-0 overflow-y-auto">
-      {/* Navigation Menu */}
-      <nav className="p-4">
+    <aside className="flex w-60 flex-shrink-0 flex-col overflow-y-auto border-r border-gray-200 bg-white">
+      <nav className="flex-1 p-4 pb-10">
         <ul className="space-y-1">
           {menuItems.map((item) => (
             <li key={item.path}>

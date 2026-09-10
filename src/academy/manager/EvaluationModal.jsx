@@ -25,13 +25,9 @@ import { fullName, inputClass, LoadingState, ReadOnlyField, statusBadgeClass, us
 
 // Mülakat satırını date / open / single / multi çizer.
 function isInterviewDateCriterion(criterion, questionTypes = []) {
-  const kind = getQuestionKind(criterion, questionTypes)
-  if (kind === 'date') return true
+  if (getQuestionKind(criterion, questionTypes) === 'date') return true
   const noChoices = !Array.isArray(criterion?.choices) || criterion.choices.length === 0
-  if (!noChoices) return false
-  return isDateAnswerValue(criterion?.answerText)
-    || /tarih|\bdate\b/i.test(String(criterion?.questionText || ''))
-    || /tarih|\bdate\b|\bdt\b/i.test(String(criterion?.tpShrtCode || ''))
+  return noChoices && isDateAnswerValue(criterion?.answerText)
 }
 
 function getInterviewRenderKind(criterion, questionTypes = []) {
@@ -563,7 +559,7 @@ export default function EvaluationModal({ appId, onClose, onSaved, statuses: sta
 
               {/* Ad, iletişim, üniversite / bölüm puanı */}
               <CollapsibleSection
-                title="Kişisel bilgiler"
+                title="Kişisel Bilgiler"
                 hint={[details?.universityName, details?.departmentName].filter(Boolean).join(' · ') || 'Ad, iletişim, üniversite ve bölüm'}
                 open={openSections.personal}
                 onToggle={() => toggleSection('personal')}
@@ -600,7 +596,7 @@ export default function EvaluationModal({ appId, onClose, onSaved, statuses: sta
 
               {/* Aday cevapları; açık uçlu / Diğer için manuel puan */}
               <CollapsibleSection
-                title="Form cevapları"
+                title="Form Cevapları"
                 hint={
                   candidateAnswers.length === 0
                     ? 'Ek form cevabı yok'
@@ -887,7 +883,7 @@ export default function EvaluationModal({ appId, onClose, onSaved, statuses: sta
 
               {/* Başvuru durumu */}
               <CollapsibleSection
-                title={readOnly ? 'Durum' : 'Durum değiştirme'}
+                title={readOnly ? 'Durum' : 'Durum Değiştirme'}
                 hint={selectedStatus?.name || undefined}
                 open={openSections.status}
                 onToggle={() => toggleSection('status')}

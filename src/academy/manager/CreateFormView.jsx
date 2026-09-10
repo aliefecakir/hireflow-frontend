@@ -11,7 +11,7 @@ import {
   toFlag,
   toFormDateTimeInput,
 } from '../api/helpers'
-import { CompactCategoryFilter, ConfirmDialog, inputClass, paginateRows, prependAttachment, PurposeBadge, renumberAttachments, reorderAttachments, Switch, TablePager, TypeBadge } from './ui'
+import { CompactCategoryFilter, ConfirmDialog, inputClass, paginateRows, appendAttachment, PurposeBadge, renumberAttachments, reorderAttachments, Switch, TablePager, TypeBadge } from './ui'
 import OrganizationModal from './OrganizationModal'
 import OrganizationDetailsModal from './OrganizationDetailsModal'
 import QuestionModal from './QuestionModal'
@@ -179,9 +179,9 @@ export default function CreateFormView({
     }))
   }
 
-  // Forma bağla (üste ekle) / çıkar / sürükle-sırala.
+  // Forma bağla (sona ekle) / çıkar / sürükle-sırala.
   const attachQuestion = (questionId) => {
-    setAttachments((prev) => prependAttachment(prev, questionId))
+    setAttachments((prev) => appendAttachment(prev, questionId))
     setQuestionPage(1)
   }
 
@@ -192,7 +192,7 @@ export default function CreateFormView({
         delete next[questionId]
         return renumberAttachments(next)
       }
-      return prependAttachment(prev, questionId)
+      return appendAttachment(prev, questionId)
     })
     setQuestionPage(1)
   }
@@ -340,7 +340,7 @@ export default function CreateFormView({
                 checked={isActv}
                 onChange={setIsActv}
                 disabled={endDatePassed}
-                label={isActv ? 'Form aktif' : 'Form pasif'}
+                label={isActv ? 'Form Aktif' : 'Form Pasif'}
               />
               {endDatePassed ? (
                 <p className="mt-2 text-xs text-slate-500">
@@ -501,7 +501,7 @@ export default function CreateFormView({
                                 }))
                                 return
                               }
-                              setAttachments((prev) => prependAttachment(prev, questionId, { isReq: toFlag(value) }))
+                              setAttachments((prev) => appendAttachment(prev, questionId, { isReq: toFlag(value) }))
                               setQuestionPage(1)
                             }}
                           />

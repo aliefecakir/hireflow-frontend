@@ -180,7 +180,7 @@ function AcademyManagerShell() {
 
       <div className="flex flex-1 overflow-hidden">
         <aside className="flex w-60 flex-shrink-0 flex-col overflow-y-auto border-r border-gray-200 bg-white">
-          <nav className="flex flex-1 flex-col p-4">
+          <nav className="flex flex-1 flex-col p-4 pb-10">
             <ul className="space-y-1">
               {primaryItems.map((item) => (
                 <li key={item.id}>

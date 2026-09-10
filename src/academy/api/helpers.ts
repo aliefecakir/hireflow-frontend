@@ -5,11 +5,29 @@ export const DEFAULT_PAGE_SIZE = 10
 export type QuestionKind = 'single' | 'multi' | 'open' | 'file' | 'date'
 
 export const KIND_LABELS: Record<QuestionKind, string> = {
-  single: 'Tek Seçmeli',
-  multi: 'Çok Seçmeli',
+  single: 'Çoktan Seçmeli(Tek Cevaplı)',
+  multi: 'Çoktan Seçmeli(Çok Cevaplı)',
   open: 'Açık Uçlu',
   file: 'CV',
   date: 'Tarih',
+}
+
+const KIND_BY_SHRT_CODE: Record<string, QuestionKind> = {
+  SINGLE_CHOICE: 'single',
+  SNGL: 'single',
+  SINGLE: 'single',
+  TSS: 'single',
+  MULTIPLE_CHOICE: 'multi',
+  MULT: 'multi',
+  MULTI: 'multi',
+  CSS: 'multi',
+  OPEN: 'open',
+  TEXT: 'open',
+  AU: 'open',
+  FILE: 'file',
+  CV: 'file',
+  DATE: 'date',
+  DT: 'date',
 }
 
 export interface QuestionChoice {
@@ -55,6 +73,7 @@ type KindSource = {
   tpId?: string | number | null
   tpShrtCode?: string | null
   shrtCode?: string | null
+  kind?: QuestionKind | string | null
   name?: string | null
   tpName?: string | null
   questionText?: string | null
@@ -62,22 +81,21 @@ type KindSource = {
   choices?: unknown[] | null
 }
 
-// Tip tespiti için metni sadeleştirir (TR karakter, kısaltma).
-function fold(value: unknown): string {
-  return String(value ?? '')
-    .replace(/İ/g, 'i')
-    .replace(/I/g, 'i')
-    .replace(/ı/g, 'i')
-    .toLocaleLowerCase('tr-TR')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/ç/g, 'c')
-    .replace(/ğ/g, 'g')
-    .replace(/ö/g, 'o')
-    .replace(/ş/g, 's')
-    .replace(/ü/g, 'u')
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim()
+function isQuestionKind(value: unknown): value is QuestionKind {
+  return value === 'single' || value === 'multi' || value === 'open' || value === 'file' || value === 'date'
+}
+
+function kindFromCode(value: unknown): QuestionKind | null {
+  const code = String(value ?? '').trim().toUpperCase()
+  if (!code) return null
+  return KIND_BY_SHRT_CODE[code] ?? null
+}
+
+function kindFromMeta(source: KindSource | CatalogQuestionType | null | undefined): QuestionKind | null {
+  if (!source) return null
+  if (isQuestionKind(source.kind)) return source.kind
+  return kindFromCode(source.shrtCode)
+    || ('tpShrtCode' in source ? kindFromCode(source.tpShrtCode) : null)
 }
 
 // Cevap metninin tarih veya CV URL'i olup olmadığı.
@@ -96,57 +114,6 @@ export function isFileAnswerUrl(value: unknown): boolean {
   } catch {
     return false
   }
-}
-
-// Kod/isim metninden soru türü (single/multi/open/file/date).
-function kindFromText(value: unknown): QuestionKind | null {
-  const text = fold(value)
-  if (!text) return null
-  if (
-    /\b(file|cv|pdf)\b/.test(text)
-    || text.includes('dosya')
-  ) {
-    return 'file'
-  }
-  if (
-    /\b(date|dt)\b/.test(text)
-    || text.includes('tarih')
-  ) {
-    return 'date'
-  }
-  if (
-    /\b(mult|multi|multiple|ms|chk|css|checkbox)\b/.test(text)
-    || text.includes('coktan')
-    || text.includes('coklu')
-    || text.includes('birden fazla')
-    || (text.includes('cok') && (text.includes('sec') || text.includes('secenek') || text.includes('sik')))
-  ) {
-    return 'multi'
-  }
-  if (
-    /\b(open|text|oe|au|txt)\b/.test(text)
-    || text.includes('acik ucl')
-    || text.includes('serbest')
-    || text.includes('uclu')
-  ) {
-    return 'open'
-  }
-  if (
-    /\b(sngl|single|radio|sc|tss)\b/.test(text)
-    || text.includes('tek sec')
-  ) {
-    return 'single'
-  }
-  return null
-}
-
-function kindFromMeta(source: KindSource | CatalogQuestionType | null | undefined): QuestionKind | null {
-  if (!source) return null
-  return kindFromText(source.shrtCode)
-    || ('tpShrtCode' in source ? kindFromText(source.tpShrtCode) : null)
-    || kindFromText(source.name)
-    || ('tpName' in source ? kindFromText(source.tpName) : null)
-    || ('entCodeName' in source ? kindFromText(source.entCodeName) : null)
 }
 
 // Mülakat kriteri (isAssmt) olmayan aday soruları.
@@ -183,7 +150,13 @@ export function normalizeQuestionTypes(rows: unknown): CatalogQuestionType[] {
       const name = String(item.name ?? item.shrtCode ?? id)
       const shrtCode = item.shrtCode != null ? String(item.shrtCode) : null
       const entCodeName = item.entCodeName != null ? String(item.entCodeName) : null
-      const kind = kindFromMeta({ id, name, shrtCode, tpShrtCode: shrtCode || null, entCodeName }) || 'single'
+      const kind = kindFromMeta({
+        id,
+        name,
+        shrtCode,
+        tpShrtCode: shrtCode || null,
+        kind: isQuestionKind(item.kind) ? item.kind : null,
+      }) || 'single'
       return { id, name, shrtCode, entCodeName, kind }
     })
     .filter((row): row is NonNullable<typeof row> => row !== null)
@@ -191,49 +164,39 @@ export function normalizeQuestionTypes(rows: unknown): CatalogQuestionType[] {
   return result as CatalogQuestionType[]
 }
 
-function kindFromChoicelessFallback(question: KindSource): QuestionKind | null {
-  const choiceCount = Array.isArray(question.choices) ? question.choices.length : null
-  if (choiceCount !== 0) return null
-  return kindFromText(question.questionText) || kindFromText(question.name)
+function applyChoiceFallback(question: KindSource, kind: QuestionKind): QuestionKind {
+  if (
+    (kind === 'single' || kind === 'multi')
+    && Array.isArray(question.choices)
+    && question.choices.length === 0
+  ) {
+    return 'open'
+  }
+  return kind
 }
 
-// Katalog + şık/metin fallback ile soru türünü çözer.
+// Katalog + SHRT_CODE ile soru türünü çözer; görünen ad / soru metni kullanılmaz.
 export function getQuestionKind(
   question: KindSource | null | undefined,
   catalog: Array<Pick<CatalogQuestionType, 'id' | 'kind' | 'name' | 'shrtCode' | 'entCodeName'>> = [],
 ): QuestionKind {
   if (!question) return 'single'
 
-  const choicelessKind = kindFromChoicelessFallback(question)
   const isQuestionRow = question.questionText != null && String(question.questionText) !== ''
   const tpId = question.tpId != null && String(question.tpId) !== ''
     ? question.tpId
     : (isQuestionRow ? undefined : question.id)
 
+  const fromCodes = kindFromMeta(question)
+  if (fromCodes) return applyChoiceFallback(question, fromCodes)
+
   if (catalog.length > 0 && tpId != null && String(tpId) !== '') {
     const match = catalog.find((item) => String(item.id) === String(tpId))
-    const catalogKind = match?.kind || kindFromMeta(match)
-    if (catalogKind) {
-      if (
-        (catalogKind === 'single' || catalogKind === 'multi' || catalogKind === 'open')
-        && (choicelessKind === 'date' || choicelessKind === 'file')
-      ) {
-        return choicelessKind
-      }
-      if (
-        (catalogKind === 'single' || catalogKind === 'multi')
-        && Array.isArray(question.choices)
-        && question.choices.length === 0
-      ) {
-        return choicelessKind || 'open'
-      }
-      return catalogKind
-    }
+    const catalogKind = match?.kind && isQuestionKind(match.kind)
+      ? match.kind
+      : kindFromMeta(match)
+    if (catalogKind) return applyChoiceFallback(question, catalogKind)
   }
-
-  const fromMeta = kindFromMeta(question)
-  if (fromMeta) return fromMeta
-  if (choicelessKind) return choicelessKind
 
   if (Array.isArray(question.choices)) {
     return question.choices.length === 0 ? 'open' : 'single'

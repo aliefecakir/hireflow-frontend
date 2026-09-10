@@ -6,7 +6,7 @@ import { DEFAULT_PAGE_SIZE, KIND_LABELS, PAGE_SIZE_OPTIONS, isFlagOn } from '../
 export const inputClass =
   'w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500'
 
-// Forma bağlı soru map: sıra, üste ekle, sürükle.
+// Forma bağlı soru map: sıra, sona ekle, sürükle.
 export function renumberAttachments(map) {
   const rows = Object.values(map).sort((a, b) => Number(a.ordNo) - Number(b.ordNo))
   const next = {}
@@ -16,14 +16,13 @@ export function renumberAttachments(map) {
   return next
 }
 
-export function prependAttachment(map, questionId, extra = {}) {
+export function appendAttachment(map, questionId, extra = {}) {
   if (map[questionId]) return map
-  const next = {}
-  for (const [id, item] of Object.entries(map)) {
-    next[id] = { ...item, ordNo: Number(item.ordNo) + 1 }
+  const nextOrdNo = Object.values(map).reduce((max, item) => Math.max(max, Number(item.ordNo) || 0), 0) + 1
+  return {
+    ...map,
+    [questionId]: { questionId, isReq: 1, ordNo: nextOrdNo, ...extra },
   }
-  next[questionId] = { questionId, isReq: 1, ordNo: 1, ...extra }
-  return next
 }
 
 export function reorderAttachments(map, fromId, toId) {
@@ -165,7 +164,7 @@ export function CompactCategoryFilter({ groups, activeId, onActiveChange }) {
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span className="shrink-0 text-sm font-medium text-slate-700">Filtre uygula:</span>
+      <span className="shrink-0 text-sm font-medium text-slate-700">Filtre Uygula:</span>
       <select
         value={active.id}
         onChange={(event) => onActiveChange(event.target.value)}
@@ -236,7 +235,7 @@ export function TablePager({ page, size, total, onPageChange, onSizeChange, disa
   return (
     <div className="flex flex-col gap-3 border-t border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
       <label className="flex items-center gap-2 text-sm text-slate-600">
-        Sayfa başına
+        Sayfa Başına
         <select
           value={pageSize}
           disabled={disabled}

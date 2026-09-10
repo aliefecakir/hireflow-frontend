@@ -230,7 +230,7 @@ export default function QuestionModal({
     }
 
     if (isChoiceType && preparedChoices.filter((choice) => !choice.isOther).length < 2) {
-      showToast.warning('Dikkat', 'Tek seçmeli ve çok seçmeli sorular için en az iki şık girin.')
+      showToast.warning('Dikkat', 'Çoktan seçmeli sorular için en az iki şık girin.')
       return null
     }
 

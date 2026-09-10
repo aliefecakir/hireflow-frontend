@@ -174,7 +174,7 @@ export default function ApplicationListPage() {
 
   const pagedApplications = paginateRows(filteredApplications, page, pageSize)
   const activeFilter = FILTER_FIELDS.find((item) => item.id === filterField) || FILTER_FIELDS[0]
-  const filterPlaceholder = `${activeFilter.label} ara`
+  const filterPlaceholder = `${activeFilter.label} Ara`
 
   const handleFilterFieldChange = (nextField) => {
     setFilterField(nextField)
@@ -203,7 +203,7 @@ export default function ApplicationListPage() {
         <h1 className="mt-3 text-2xl font-bold text-slate-800">{form?.title || 'Form'} Başvuruları</h1>
         <p className="mt-1 text-sm text-slate-600">
           {loading
-            ? 'Başvurular yükleniyor...'
+            ? 'Başvurular Yükleniyor...'
             : foldText(filterQuery) && pagedApplications.total !== applications.length
               ? `${pagedApplications.total} / ${applications.length} Aday`
               : `${applications.length} Aday`}
@@ -212,7 +212,7 @@ export default function ApplicationListPage() {
 
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
         {loading && applications.length === 0 ? (
-          <LoadingState label="Başvurular yükleniyor..." />
+          <LoadingState label="Başvurular Yükleniyor..." />
         ) : applications.length === 0 ? (
           <div className="px-6 py-16 text-center">
             <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100">
