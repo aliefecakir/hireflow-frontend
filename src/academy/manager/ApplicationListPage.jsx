@@ -27,7 +27,7 @@ const EMPTY_FILTERS = {
   fullName: '',
   university: '',
   department: '',
-  status: '',
+  status: [],
   totalScoreMin: '',
   totalScoreMax: '',
   interviewScoreMin: '',
@@ -87,7 +87,10 @@ function matchesScoreRange(score, minRaw, maxRaw) {
 }
 
 function isFiltersActive(filters) {
-  return Object.values(filters).some((value) => String(value ?? '').trim() !== '')
+  return Object.values(filters).some((value) => {
+    if (Array.isArray(value)) return value.length > 0
+    return String(value ?? '').trim() !== ''
+  })
 }
 
 function formatScoreRange(minRaw, maxRaw) {
@@ -104,24 +107,99 @@ function getActiveFilterChips(filters) {
   for (const field of FILTER_FIELDS) {
     if (field.id === 'totalScore') {
       const value = formatScoreRange(filters.totalScoreMin, filters.totalScoreMax)
-      if (value) chips.push({ id: field.id, label: field.label, value })
+      if (value) chips.push({ id: field.id, key: field.id, label: field.label, value })
       continue
     }
     if (field.id === 'interviewScore') {
       const value = formatScoreRange(filters.interviewScoreMin, filters.interviewScoreMax)
-      if (value) chips.push({ id: field.id, label: field.label, value })
+      if (value) chips.push({ id: field.id, key: field.id, label: field.label, value })
+      continue
+    }
+    if (field.id === 'status') {
+      for (const value of filters.status || []) {
+        const label = String(value || '').trim()
+        if (label) chips.push({ id: field.id, key: `status:${label}`, label: field.label, value: label })
+      }
       continue
     }
     const value = String(filters[field.id] ?? '').trim()
-    if (value) chips.push({ id: field.id, label: field.label, value })
+    if (value) chips.push({ id: field.id, key: field.id, label: field.label, value })
   }
   return chips
 }
 
-function clearFilterGroup(filters, id) {
+function clearFilterGroup(filters, id, value) {
   if (id === 'totalScore') return { ...filters, totalScoreMin: '', totalScoreMax: '' }
   if (id === 'interviewScore') return { ...filters, interviewScoreMin: '', interviewScoreMax: '' }
+  if (id === 'status') {
+    if (!value) return { ...filters, status: [] }
+    const folded = foldText(value)
+    return {
+      ...filters,
+      status: (filters.status || []).filter((item) => foldText(item) !== folded),
+    }
+  }
   return { ...filters, [id]: '' }
+}
+
+function StatusFilterSelect({ options, selected, onChange, open, onToggle }) {
+  const selectedLabels = Array.isArray(selected) ? selected : []
+  const summary = selectedLabels.length === 0
+    ? 'Durum seçin'
+    : selectedLabels.length === 1
+      ? selectedLabels[0]
+      : `${selectedLabels.length} durum seçildi`
+
+  const toggle = (label) => {
+    const folded = foldText(label)
+    const exists = selectedLabels.some((item) => foldText(item) === folded)
+    onChange(exists
+      ? selectedLabels.filter((item) => foldText(item) !== folded)
+      : [...selectedLabels, label])
+  }
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        className={`${inputClass} text-left ${selectedLabels.length === 0 ? 'text-slate-400' : ''}`}
+      >
+        {summary}
+      </button>
+      {open ? (
+        <ul
+          className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+          role="listbox"
+          aria-multiselectable="true"
+          aria-label="Durum seçin"
+        >
+          {options.length === 0 ? (
+            <li className="px-3 py-2 text-sm text-slate-500">Durum bulunamadı</li>
+          ) : (
+            options.map((label) => {
+              const checked = selectedLabels.some((item) => foldText(item) === foldText(label))
+              return (
+                <li key={label} role="option" aria-selected={checked}>
+                  <label className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggle(label)}
+                      className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span>{label}</span>
+                  </label>
+                </li>
+              )
+            })
+          )}
+        </ul>
+      ) : null}
+    </div>
+  )
 }
 
 export default function ApplicationListPage() {
@@ -224,8 +302,8 @@ export default function ApplicationListPage() {
     setPage(1)
   }
 
-  const clearFilter = (id) => {
-    setFilters((prev) => clearFilterGroup(prev, id))
+  const clearFilter = (id, value) => {
+    setFilters((prev) => clearFilterGroup(prev, id, value))
     setSuggestOpen(false)
     setPage(1)
   }
@@ -234,13 +312,13 @@ export default function ApplicationListPage() {
     const nameQuery = foldText(filters.fullName)
     const universityQuery = foldText(filters.university)
     const departmentQuery = foldText(filters.department)
-    const statusQuery = foldText(filters.status)
+    const statusSet = new Set((filters.status || []).map(foldText).filter(Boolean))
 
     return applications.filter((row) => {
       if (nameQuery && !foldText(applicationFilterText(row, 'fullName')).includes(nameQuery)) return false
       if (universityQuery && !foldText(applicationFilterText(row, 'university')).includes(universityQuery)) return false
       if (departmentQuery && !foldText(applicationFilterText(row, 'department')).includes(departmentQuery)) return false
-      if (statusQuery && foldText(applicationFilterText(row, 'status')) !== statusQuery) return false
+      if (statusSet.size > 0 && !statusSet.has(foldText(applicationFilterText(row, 'status')))) return false
       if (!matchesScoreRange(row.totalScore, filters.totalScoreMin, filters.totalScoreMax)) return false
       if (!matchesScoreRange(row.interviewScore, filters.interviewScoreMin, filters.interviewScoreMax)) return false
       return true
@@ -333,19 +411,13 @@ export default function ApplicationListPage() {
                 </select>
                 <div className="relative min-w-0 w-full sm:max-w-md">
                   {filterField === 'status' ? (
-                    <select
-                      value={filters.status}
-                      onChange={(event) => updateFilter('status', event.target.value)}
-                      className={inputClass}
-                      aria-label="Durum seçin"
-                    >
-                      <option value="">Durum seçin</option>
-                      {statusOptions.map((label) => (
-                        <option key={label} value={label}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
+                    <StatusFilterSelect
+                      options={statusOptions}
+                      selected={filters.status}
+                      onChange={(next) => updateFilter('status', next)}
+                      open={suggestOpen}
+                      onToggle={() => setSuggestOpen((open) => !open)}
+                    />
                   ) : filterField === 'totalScore' || filterField === 'interviewScore' ? (
                     <div className="grid grid-cols-2 gap-2">
                       <input
@@ -428,7 +500,7 @@ export default function ApplicationListPage() {
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   {activeChips.map((chip) => (
                     <span
-                      key={chip.id}
+                      key={chip.key}
                       className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium ${
                         chip.id === filterField
                           ? 'border-blue-200 bg-blue-50 text-blue-700'
@@ -446,7 +518,7 @@ export default function ApplicationListPage() {
                         type="button"
                         aria-label={`${chip.label} filtresini kaldır`}
                         className="rounded-full p-0.5 hover:bg-white/80"
-                        onClick={() => clearFilter(chip.id)}
+                        onClick={() => clearFilter(chip.id, chip.id === 'status' ? chip.value : undefined)}
                       >
                         <X className="h-3 w-3" />
                       </button>
