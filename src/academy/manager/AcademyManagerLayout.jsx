@@ -1,7 +1,8 @@
 // Yönetici kabuğu: header, menü, Outlet.
 import { useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { CircleHelp, ClipboardList, FilePlus, Shield } from 'lucide-react'
+import { Award, CircleHelp, ClipboardList, FilePlus, Info, Shield } from 'lucide-react'
+import AboutModal from './AboutModal'
 import BrandMark from '../../shared/BrandMark'
 import { useAuth } from '../../shared/AuthContext'
 import { usePermissions } from '../../shared/usePermissions'
@@ -17,18 +18,21 @@ const MENU_ITEMS = [
   { id: 'forms', label: 'Formlar', hint: 'Ana Sayfa', icon: ClipboardList, to: '/academy/manager/forms' },
   { id: 'create', label: 'Form Oluştur', icon: FilePlus, to: '/academy/manager/create', roles: ACADEMY_WRITE_ROLES },
   { id: 'pool', label: 'Soru Havuzu', icon: CircleHelp, to: '/academy/manager/pool', roles: ACADEMY_WRITE_ROLES },
+  { id: 'catalog', label: 'Puan Yönetimi', icon: Award, to: '/academy/manager/catalog', roles: ACADEMY_WRITE_ROLES },
   { id: 'admin', label: 'Admin Paneli', icon: Shield, to: '/academy/manager/admin', roles: ACADEMY_ADMIN_ROLES, pin: 'bottom' },
 ]
 
-// create/edit aynı menü; pool ayrı; admin ayrı; geri kalan forms.
+// create/edit aynı menü; pool ayrı; catalog ayrı; admin ayrı; geri kalan forms.
 function isMenuActive(itemId, pathname) {
   const createActive = pathname.endsWith('/create') || /\/forms\/[^/]+\/edit$/.test(pathname)
   const poolActive = pathname.endsWith('/pool')
+  const catalogActive = pathname.endsWith('/catalog')
   const adminActive = pathname.endsWith('/admin')
   if (itemId === 'create') return createActive
   if (itemId === 'pool') return poolActive
+  if (itemId === 'catalog') return catalogActive
   if (itemId === 'admin') return adminActive
-  return !createActive && !poolActive && !adminActive
+  return !createActive && !poolActive && !catalogActive && !adminActive
 }
 
 function sameLocation(pathname, search, href) {
@@ -70,6 +74,7 @@ function AcademyManagerShell() {
   const { roles, roleLabel } = usePermissions()
   const { isDirty, setDirty } = useUnsavedChanges()
   const [showProfileMenu, setShowProfileMenu] = useState(false)
+  const [showAbout, setShowAbout] = useState(false)
   const [confirmKind, setConfirmKind] = useState(null)
   const [pendingHref, setPendingHref] = useState(null)
   const userName = displayName(userProfile)
@@ -100,6 +105,7 @@ function AcademyManagerShell() {
     if (!anchor || anchor.getAttribute('target') === '_blank') return
     const href = anchor.getAttribute('href')
     if (!href || href.startsWith('#')) return
+    if (href.startsWith('mailto:') || href.startsWith('tel:')) return
     if (sameLocation(pathname, search, href)) return
     event.preventDefault()
     event.stopPropagation()
@@ -172,6 +178,17 @@ function AcademyManagerShell() {
                   </svg>
                   <span>Çıkış Yap</span>
                 </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowProfileMenu(false)
+                    setShowAbout(true)
+                  }}
+                  className="flex w-full items-center space-x-2 px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                >
+                  <Info className="h-4 w-4" />
+                  <span>Hakkında</span>
+                </button>
               </div>
             ) : null}
           </div>
@@ -205,6 +222,8 @@ function AcademyManagerShell() {
           <Outlet />
         </main>
       </div>
+
+      {showAbout ? <AboutModal onClose={() => setShowAbout(false)} /> : null}
 
       {confirmKind === 'leave' ? (
         <ConfirmDialog

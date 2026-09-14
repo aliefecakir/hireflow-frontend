@@ -1,5 +1,5 @@
 // Aday başvuru formu: /academy/apply/:formId
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, GraduationCap, Upload } from 'lucide-react'
 import PhoneInput, { isValidPhoneNumber } from 'react-phone-number-input'
@@ -24,7 +24,6 @@ import {
 } from '../api/helpers'
 import { getQuestionTypes } from '../api/questions'
 import { getErrorMessage } from '../../shared/api/client'
-import departmentCatalog from '../../resources/departments.json'
 import { supabase } from '../../shared/supabaseClient'
 import { showToast } from '../../shared/toast/ToastProvider'
 
@@ -158,15 +157,6 @@ export default function AcademyApply() {
   const [submitting, setSubmitting] = useState(false)
   const [phoneError, setPhoneError] = useState('')
 
-  // departments.json yedek katalog.
-  const fallbackDepartments = useMemo(
-    () =>
-      (departmentCatalog || [])
-        .map((row) => ({ id: Number(row.ID), name: row.DEPARTMENT }))
-        .filter((row) => row.id && row.name),
-    [],
-  )
-
   // Form, sorular, uni/bölüm, tipler; applyState: open | upcoming | closed.
   useEffect(() => {
     let cancelled = false
@@ -202,8 +192,9 @@ export default function AcademyApply() {
         setApplyState('open')
         setQuestions(sortQuestions(filterCandidateQuestions(Array.isArray(formQuestions) ? formQuestions : [])))
         setQuestionTypes(Array.isArray(typeRows) ? typeRows : [])
-        setUniversities(universityRows)
-        setDepartments(departmentRows.length > 0 ? departmentRows : fallbackDepartments)
+        // Yalnızca IS_ACTV=1 kayıtlar; boş liste geldiyse yerel katalogla doldurulmaz.
+        setUniversities(Array.isArray(universityRows) ? universityRows : [])
+        setDepartments(Array.isArray(departmentRows) ? departmentRows : [])
       } catch (error) {
         console.error('Başvuru formu yüklenemedi:', error)
         if (!cancelled) {
@@ -222,7 +213,7 @@ export default function AcademyApply() {
     return () => {
       cancelled = true
     }
-  }, [fallbackDepartments, formId])
+  }, [formId])
 
   const updateProfile = (event) => {
     const { name, value } = event.target

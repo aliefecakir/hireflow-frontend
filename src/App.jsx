@@ -16,6 +16,7 @@ import FormListPage from './academy/manager/FormListPage'
 import CreateFormPage from './academy/manager/CreateFormPage'
 import QuestionPoolPage from './academy/manager/QuestionPoolPage'
 import ApplicationListPage from './academy/manager/ApplicationListPage'
+import CatalogScorePage from './academy/manager/CatalogScorePage'
 import AdminPanelPage from './academy/manager/AdminPanelPage'
 import Login from './shared/Login'
 import Register from './shared/Register'
@@ -76,6 +77,11 @@ export default function App() {
             <Route path="pool" element={
               <RoleGuard allowedRoles={[...ACADEMY_WRITE_ROLES]}>
                 <QuestionPoolPage />
+              </RoleGuard>
+            } />
+            <Route path="catalog" element={
+              <RoleGuard allowedRoles={[...ACADEMY_WRITE_ROLES]}>
+                <CatalogScorePage />
               </RoleGuard>
             } />
             <Route path="admin" element={

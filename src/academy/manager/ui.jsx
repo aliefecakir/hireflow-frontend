@@ -1,7 +1,7 @@
 // Yönetici ortak UI: input, pager, badge, confirm, attachment sırası.
 import { useEffect } from 'react'
 import { ChevronLeft, ChevronRight, X } from 'lucide-react'
-import { DEFAULT_PAGE_SIZE, KIND_LABELS, PAGE_SIZE_OPTIONS, isFlagOn } from '../api/helpers'
+import { DEFAULT_PAGE_SIZE, KIND_LABELS, PAGE_SIZE_OPTIONS, getChoiceId, isFlagOn } from '../api/helpers'
 
 export const inputClass =
   'w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500'
@@ -331,6 +331,30 @@ export function TypeBadge({ kind }) {
     <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${typeBadgeClass(kind)}`}>
       {KIND_LABELS[kind] || KIND_LABELS.single}
     </span>
+  )
+}
+
+// Şık listesi: sıra, metin, puan. "Diğer" şıkkında puan üst sınırdır.
+export function ChoiceList({ choices, className = '' }) {
+  const rows = [...(choices || [])].sort((a, b) => Number(a.ordNo) - Number(b.ordNo))
+  if (rows.length === 0) return null
+
+  return (
+    <ul className={`space-y-1.5 ${className}`}>
+      {rows.map((choice) => (
+        <li
+          key={getChoiceId(choice)}
+          className="flex items-center justify-between gap-3 text-sm text-slate-600"
+        >
+          <span>
+            {choice.ordNo}. {choice.choiceText}
+          </span>
+          <span className="shrink-0 rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
+            {isFlagOn(choice.isOther) ? `${choice.score} Max puan` : `${choice.score} puan`}
+          </span>
+        </li>
+      ))}
+    </ul>
   )
 }
 

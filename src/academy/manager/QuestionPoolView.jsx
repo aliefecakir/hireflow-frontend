@@ -1,8 +1,8 @@
 // Havuz listesi: filtre, kartlar, soru oluştur/düzenle/sil.
 import { useMemo, useState } from 'react'
 import { Edit2, Plus } from 'lucide-react'
-import { DEFAULT_PAGE_SIZE, getChoiceId, getQuestionId, getQuestionKind, isFlagOn, KIND_LABELS } from '../api/helpers'
-import { CompactCategoryFilter, paginateRows, PurposeBadge, TablePager, TypeBadge } from './ui'
+import { DEFAULT_PAGE_SIZE, getQuestionId, getQuestionKind, isFlagOn, KIND_LABELS } from '../api/helpers'
+import { ChoiceList, CompactCategoryFilter, paginateRows, PurposeBadge, TablePager, TypeBadge } from './ui'
 import QuestionModal from './QuestionModal'
 import { deleteQuestion, getQuestionUsage, updateQuestion } from '../api/questions'
 import { getErrorMessage } from '../../shared/api/client'
@@ -191,22 +191,7 @@ export default function QuestionPoolView({ questions, questionTypes, onAddQuesti
                     <PurposeBadge isAssmt={question.isAssmt} />
                   </div>
                   <p className="mt-2 text-sm font-medium text-slate-800">{question.questionText}</p>
-                  {(question.choices || []).length > 0 && (
-                    <ul className="mt-3 space-y-1.5">
-                      {[...question.choices]
-                        .sort((a, b) => a.ordNo - b.ordNo)
-                        .map((choice) => (
-                          <li key={getChoiceId(choice)} className="flex items-center justify-between text-sm text-slate-600">
-                            <span>
-                              {choice.ordNo}. {choice.choiceText}
-                            </span>
-                            <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
-                              {isFlagOn(choice.isOther) ? `${choice.score} Max puan` : `${choice.score} puan`}
-                            </span>
-                          </li>
-                        ))}
-                    </ul>
-                  )}
+                  <ChoiceList choices={question.choices} className="mt-3" />
                 </div>
               )
             })

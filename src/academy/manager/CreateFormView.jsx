@@ -1,6 +1,6 @@
 // Form ekranı: meta alanlar + havuzdan soru bağlama.
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { GripVertical, List, Plus } from 'lucide-react'
+import { ChevronDown, ChevronRight, GripVertical, List, Plus } from 'lucide-react'
 import {
   DEFAULT_PAGE_SIZE,
   getQuestionId,
@@ -11,7 +11,7 @@ import {
   toFlag,
   toFormDateTimeInput,
 } from '../api/helpers'
-import { CompactCategoryFilter, ConfirmDialog, inputClass, paginateRows, appendAttachment, PurposeBadge, renumberAttachments, reorderAttachments, Switch, TablePager, TypeBadge } from './ui'
+import { ChoiceList, CompactCategoryFilter, ConfirmDialog, inputClass, paginateRows, appendAttachment, PurposeBadge, renumberAttachments, reorderAttachments, Switch, TablePager, TypeBadge } from './ui'
 import OrganizationModal from './OrganizationModal'
 import OrganizationDetailsModal from './OrganizationDetailsModal'
 import QuestionModal from './QuestionModal'
@@ -67,6 +67,7 @@ export default function CreateFormView({
   const [attachments, setAttachments] = useState({})
   const [isActv, setIsActv] = useState(true)
   const [purposeFilter, setPurposeFilter] = useState('all')
+  const [expandedQuestionIds, setExpandedQuestionIds] = useState(() => new Set())
   const [typeFilter, setTypeFilter] = useState('all')
   const [activeFilter, setActiveFilter] = useState('purpose')
   const [questionPage, setQuestionPage] = useState(1)
@@ -195,6 +196,17 @@ export default function CreateFormView({
       return appendAttachment(prev, questionId)
     })
     setQuestionPage(1)
+  }
+
+  // Şıkları göster/gizle; forma bağlama durumundan bağımsızdır.
+  const toggleChoices = (questionId) => {
+    setExpandedQuestionIds((prev) => {
+      const next = new Set(prev)
+      const key = String(questionId)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
   }
 
   const moveAttachedQuestion = (fromId, toId) => {
@@ -434,6 +446,8 @@ export default function CreateFormView({
                     const attached = attachments[questionId]
                     const kind = getQuestionKind(question, questionTypes)
                     const isDragging = String(dragQuestionId) === String(questionId)
+                    const choices = question.choices || []
+                    const choicesOpen = expandedQuestionIds.has(String(questionId))
                     return (
                       <tr
                         key={questionId}
@@ -452,7 +466,7 @@ export default function CreateFormView({
                           isDragging ? 'opacity-50' : ''
                         }`}
                       >
-                        <td className="px-2 py-3 text-slate-400">
+                        <td className="px-2 py-3 align-top text-slate-400">
                           {attached ? (
                             <button
                               type="button"
@@ -472,7 +486,7 @@ export default function CreateFormView({
                             <span className="inline-block w-5" />
                           )}
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 align-top">
                           <input
                             type="checkbox"
                             checked={Boolean(attached)}
@@ -480,14 +494,40 @@ export default function CreateFormView({
                             className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                           />
                         </td>
-                        <td className="px-4 py-3 text-slate-700">{question.questionText}</td>
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 align-top text-slate-700">
+                          <div className="flex items-start gap-1.5">
+                            {choices.length > 0 ? (
+                              <button
+                                type="button"
+                                onClick={() => toggleChoices(questionId)}
+                                aria-expanded={choicesOpen}
+                                aria-label={choicesOpen ? 'Şıkları gizle' : 'Şıkları göster'}
+                                className="mt-0.5 shrink-0 rounded text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-600"
+                              >
+                                {choicesOpen ? (
+                                  <ChevronDown className="h-4 w-4" />
+                                ) : (
+                                  <ChevronRight className="h-4 w-4" />
+                                )}
+                              </button>
+                            ) : (
+                              <span className="mt-0.5 h-4 w-4 shrink-0" />
+                            )}
+                            <span>{question.questionText}</span>
+                          </div>
+                          {choicesOpen && choices.length > 0 ? (
+                            <div className="ml-[1.375rem] mt-3 max-w-md rounded-lg border border-slate-200 bg-white p-3">
+                              <ChoiceList choices={choices} />
+                            </div>
+                          ) : null}
+                        </td>
+                        <td className="px-4 py-3 align-top">
                           <TypeBadge kind={kind} />
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 align-top">
                           <PurposeBadge isAssmt={question.isAssmt} />
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 align-top">
                           <Switch
                             checked={isFlagOn(attached?.isReq)}
                             onChange={(value) => {
@@ -506,7 +546,7 @@ export default function CreateFormView({
                             }}
                           />
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 align-top">
                           <span className={`inline-flex min-w-[2rem] justify-center rounded-lg px-2 py-1 text-sm font-semibold ${
                             attached ? 'bg-slate-100 text-slate-700' : 'text-slate-400'
                           }`}

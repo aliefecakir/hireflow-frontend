@@ -49,6 +49,15 @@ export function toFlag(value: unknown): number {
   return isFlagOn(value) ? 1 : 0
 }
 
+// Puan girişi: boş, negatif veya ondalıklı değerler geçersiz.
+export function parseScoreInput(value: unknown): number | null {
+  const text = String(value ?? '').trim()
+  if (!text) return null
+  const parsed = Number(text)
+  if (!Number.isInteger(parsed) || parsed < 0) return null
+  return parsed
+}
+
 // API alan adı farklarını tek id'ye indirger.
 export function getQuestionId(question: { id?: number; questionId?: number } | null | undefined): number | undefined {
   return question?.questionId ?? question?.id
