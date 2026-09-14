@@ -8,4 +8,6 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  // server.proxy is not used: Vite proxy only works locally and is unavailable on Vercel.
+  // API origin comes from VITE_API_URL in src/shared/api/client.ts.
 })

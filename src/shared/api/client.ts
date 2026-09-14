@@ -1,6 +1,10 @@
 import { supabase } from '../supabaseClient'
 
-export const API_ORIGIN = 'http://localhost:8080'
+const viteEnv = (import.meta as ImportMeta & {
+  env: { VITE_API_URL?: string }
+}).env
+
+export const API_ORIGIN = String(viteEnv.VITE_API_URL ?? '').replace(/\/+$/, '')
 export const API_BASE_URL = `${API_ORIGIN}/api/v1`
 export const ACADEMY_API_BASE_URL = `${API_ORIGIN}/api`
 
@@ -11,8 +15,8 @@ let currentAccessToken: string | null = null
 type AuthSession = {
   access_token?: string
   refresh_token?: string
-  provider_token?: string
-  provider_refresh_token?: string
+  provider_token?: string | null
+  provider_refresh_token?: string | null
   expires_at?: number
   user?: unknown
 } | null
