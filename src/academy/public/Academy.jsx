@@ -14,9 +14,8 @@ import { getErrorMessage } from '../../shared/api/client'
 import { showToast } from '../../shared/toast/ToastProvider'
 
 function formatDate(value) {
-  if (!value) return '—'
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return '—'
+  const parsed = parseFormDate(value)
+  if (!parsed) return '—'
   return parsed.toLocaleString('tr-TR', {
     day: 'numeric',
     month: 'long',
@@ -153,7 +152,7 @@ export default function Academy() {
                               : 'border-amber-200 bg-amber-50 text-amber-700'
                           }`}
                         >
-                          {open ? 'Başvuru açık' : 'Yakında başlayacak'}
+                          {open ? 'Başvuruya Açık' : 'Yakında başlayacak'}
                         </span>
                         <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500">
                           <Clock className="h-3.5 w-3.5" />

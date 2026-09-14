@@ -1,7 +1,7 @@
 // Form başvuruları: durum, görüntüle, değerlendir.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Eye, Pencil, Search, Users } from 'lucide-react'
+import { ArrowLeft, Eye, Pencil, Search, Users, X } from 'lucide-react'
 import {
   getAcademyAppStatuses,
   getFormApplications,
@@ -23,11 +23,24 @@ import {
 } from './ui'
 import { usePermissions } from '../../shared/usePermissions'
 
+const EMPTY_FILTERS = {
+  fullName: '',
+  university: '',
+  department: '',
+  status: '',
+  totalScoreMin: '',
+  totalScoreMax: '',
+  interviewScoreMin: '',
+  interviewScoreMax: '',
+}
+
 const FILTER_FIELDS = [
   { id: 'fullName', label: 'Ad-Soyad' },
   { id: 'university', label: 'Üniversite' },
   { id: 'department', label: 'Bölüm' },
   { id: 'status', label: 'Durum' },
+  { id: 'totalScore', label: 'Toplam puan' },
+  { id: 'interviewScore', label: 'Mülakat puanı' },
 ]
 
 function foldText(value) {
@@ -49,11 +62,73 @@ function applicationFilterText(row, field) {
   return ''
 }
 
+function parseBound(value) {
+  const text = String(value ?? '').trim()
+  if (!text) return null
+  const n = Number(text)
+  return Number.isFinite(n) ? n : null
+}
+
+function readScore(value) {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : 0
+}
+
+function matchesScoreRange(score, minRaw, maxRaw) {
+  const min = parseBound(minRaw)
+  const max = parseBound(maxRaw)
+  if (min == null && max == null) return true
+  const n = readScore(score)
+  const from = min == null ? Number.NEGATIVE_INFINITY : min
+  const to = max == null ? Number.POSITIVE_INFINITY : max
+  const low = Math.min(from, to)
+  const high = Math.max(from, to)
+  return n >= low && n <= high
+}
+
+function isFiltersActive(filters) {
+  return Object.values(filters).some((value) => String(value ?? '').trim() !== '')
+}
+
+function formatScoreRange(minRaw, maxRaw) {
+  const min = String(minRaw ?? '').trim()
+  const max = String(maxRaw ?? '').trim()
+  if (!min && !max) return ''
+  if (min && max) return `${min} – ${max}`
+  if (min) return `${min}+`
+  return `≤ ${max}`
+}
+
+function getActiveFilterChips(filters) {
+  const chips = []
+  for (const field of FILTER_FIELDS) {
+    if (field.id === 'totalScore') {
+      const value = formatScoreRange(filters.totalScoreMin, filters.totalScoreMax)
+      if (value) chips.push({ id: field.id, label: field.label, value })
+      continue
+    }
+    if (field.id === 'interviewScore') {
+      const value = formatScoreRange(filters.interviewScoreMin, filters.interviewScoreMax)
+      if (value) chips.push({ id: field.id, label: field.label, value })
+      continue
+    }
+    const value = String(filters[field.id] ?? '').trim()
+    if (value) chips.push({ id: field.id, label: field.label, value })
+  }
+  return chips
+}
+
+function clearFilterGroup(filters, id) {
+  if (id === 'totalScore') return { ...filters, totalScoreMin: '', totalScoreMax: '' }
+  if (id === 'interviewScore') return { ...filters, interviewScoreMin: '', interviewScoreMax: '' }
+  return { ...filters, [id]: '' }
+}
+
 export default function ApplicationListPage() {
   const { formId } = useParams()
   const location = useLocation()
   const navigate = useNavigate()
-  const { canWriteAcademy } = usePermissions()
+  const { canEvaluateAcademy } = usePermissions()
   const [form, setForm] = useState(location.state?.form || null)
   const [applications, setApplications] = useState([])
   const [page, setPage] = useState(1)
@@ -64,8 +139,8 @@ export default function ApplicationListPage() {
   const [savingStatus, setSavingStatus] = useState(false)
   const [evaluation, setEvaluation] = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [filters, setFilters] = useState(EMPTY_FILTERS)
   const [filterField, setFilterField] = useState('fullName')
-  const [filterQuery, setFilterQuery] = useState('')
   const [suggestOpen, setSuggestOpen] = useState(false)
   const filterWrapRef = useRef(null)
 
@@ -133,19 +208,48 @@ export default function ApplicationListPage() {
     return () => document.removeEventListener('mousedown', onPointerDown)
   }, [])
 
+  const updateFilter = (field, value) => {
+    setFilters((prev) => ({ ...prev, [field]: value }))
+    setPage(1)
+  }
+
+  const handleFilterFieldChange = (nextField) => {
+    setFilterField(nextField)
+    setSuggestOpen(false)
+  }
+
+  const clearFilters = () => {
+    setFilters(EMPTY_FILTERS)
+    setSuggestOpen(false)
+    setPage(1)
+  }
+
+  const clearFilter = (id) => {
+    setFilters((prev) => clearFilterGroup(prev, id))
+    setSuggestOpen(false)
+    setPage(1)
+  }
+
   const filteredApplications = useMemo(() => {
-    const query = foldText(filterQuery)
-    if (!query) return applications
+    const nameQuery = foldText(filters.fullName)
+    const universityQuery = foldText(filters.university)
+    const departmentQuery = foldText(filters.department)
+    const statusQuery = foldText(filters.status)
+
     return applications.filter((row) => {
-      const value = foldText(applicationFilterText(row, filterField))
-      if (filterField === 'status') return value === query
-      return value.includes(query)
+      if (nameQuery && !foldText(applicationFilterText(row, 'fullName')).includes(nameQuery)) return false
+      if (universityQuery && !foldText(applicationFilterText(row, 'university')).includes(universityQuery)) return false
+      if (departmentQuery && !foldText(applicationFilterText(row, 'department')).includes(departmentQuery)) return false
+      if (statusQuery && foldText(applicationFilterText(row, 'status')) !== statusQuery) return false
+      if (!matchesScoreRange(row.totalScore, filters.totalScoreMin, filters.totalScoreMax)) return false
+      if (!matchesScoreRange(row.interviewScore, filters.interviewScoreMin, filters.interviewScoreMax)) return false
+      return true
     })
-  }, [applications, filterField, filterQuery])
+  }, [applications, filters])
 
   const filterSuggestions = useMemo(() => {
-    if (filterField === 'status') return []
-    const query = foldText(filterQuery)
+    if (filterField === 'status' || filterField === 'totalScore' || filterField === 'interviewScore') return []
+    const query = foldText(filters[filterField])
     if (!query) return []
     const seen = new Set()
     const values = []
@@ -157,37 +261,27 @@ export default function ApplicationListPage() {
       values.push(label)
     }
     return values.sort((a, b) => a.localeCompare(b, 'tr'))
-  }, [applications, filterField, filterQuery])
+  }, [applications, filterField, filters])
 
   const statusOptions = useMemo(() => {
     const seen = new Set()
     const values = []
-    for (const row of applications) {
-      const label = applicationFilterText(row, 'status')
+    const add = (label) => {
       const folded = foldText(label)
-      if (!folded || seen.has(folded)) continue
+      if (!folded || seen.has(folded)) return
       seen.add(folded)
       values.push(label)
     }
+    for (const status of statuses) add(status?.name)
+    for (const row of applications) add(applicationFilterText(row, 'status'))
     return values.sort((a, b) => a.localeCompare(b, 'tr'))
-  }, [applications])
+  }, [applications, statuses])
 
   const pagedApplications = paginateRows(filteredApplications, page, pageSize)
+  const filtersActive = isFiltersActive(filters)
   const activeFilter = FILTER_FIELDS.find((item) => item.id === filterField) || FILTER_FIELDS[0]
+  const activeChips = getActiveFilterChips(filters)
   const filterPlaceholder = `${activeFilter.label} Ara`
-
-  const handleFilterFieldChange = (nextField) => {
-    setFilterField(nextField)
-    setFilterQuery('')
-    setPage(1)
-    setSuggestOpen(false)
-  }
-
-  const handleFilterQueryChange = (nextQuery) => {
-    setFilterQuery(nextQuery)
-    setPage(1)
-    setSuggestOpen(Boolean(foldText(nextQuery)))
-  }
 
   return (
     <div className="space-y-6">
@@ -204,7 +298,7 @@ export default function ApplicationListPage() {
         <p className="mt-1 text-sm text-slate-600">
           {loading
             ? 'Başvurular Yükleniyor...'
-            : foldText(filterQuery) && pagedApplications.total !== applications.length
+            : filtersActive && pagedApplications.total !== applications.length
               ? `${pagedApplications.total} / ${applications.length} Aday`
               : `${applications.length} Aday`}
         </p>
@@ -223,87 +317,157 @@ export default function ApplicationListPage() {
           </div>
         ) : (
           <>
-            <div ref={filterWrapRef} className="flex flex-col gap-3 border-b border-slate-200 px-4 py-3 sm:flex-row sm:items-center">
-              <select
-                value={filterField}
-                onChange={(event) => handleFilterFieldChange(event.target.value)}
-                className="w-full shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 sm:w-44"
-                aria-label="Filtre alanı"
-              >
-                {FILTER_FIELDS.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-              <div className="relative min-w-0 w-full sm:max-w-md">
-                {filterField === 'status' ? (
-                  <select
-                    value={filterQuery}
-                    onChange={(event) => {
-                      setFilterQuery(event.target.value)
-                      setPage(1)
-                    }}
-                    className={inputClass}
-                    aria-label="Durum seçin"
-                  >
-                    <option value="">Durum seçin</option>
-                    {statusOptions.map((label) => (
-                      <option key={label} value={label}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <>
-                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                    <input
-                      type="search"
-                      value={filterQuery}
-                      onChange={(event) => handleFilterQueryChange(event.target.value)}
-                      onFocus={() => {
-                        if (foldText(filterQuery)) setSuggestOpen(true)
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Escape') setSuggestOpen(false)
-                      }}
-                      placeholder={filterPlaceholder}
-                      className={`pl-9 ${inputClass}`}
-                      aria-label={filterPlaceholder}
-                      autoComplete="off"
-                    />
-                    {suggestOpen && filterSuggestions.length > 0 ? (
-                      <ul
-                        className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
-                        role="listbox"
-                        aria-label={`${activeFilter.label} önerileri`}
-                      >
-                        {filterSuggestions.map((label) => (
-                          <li key={label}>
-                            <button
-                              type="button"
-                              role="option"
-                              className="flex w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
-                              onMouseDown={(event) => event.preventDefault()}
-                              onClick={() => {
-                                handleFilterQueryChange(label)
-                                setSuggestOpen(false)
-                              }}
-                            >
-                              {label}
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                  </>
-                )}
+            <div ref={filterWrapRef} className="border-b border-slate-200 px-4 py-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <select
+                  value={filterField}
+                  onChange={(event) => handleFilterFieldChange(event.target.value)}
+                  className="w-full shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 sm:w-44"
+                  aria-label="Filtre alanı"
+                >
+                  {FILTER_FIELDS.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+                <div className="relative min-w-0 w-full sm:max-w-md">
+                  {filterField === 'status' ? (
+                    <select
+                      value={filters.status}
+                      onChange={(event) => updateFilter('status', event.target.value)}
+                      className={inputClass}
+                      aria-label="Durum seçin"
+                    >
+                      <option value="">Durum seçin</option>
+                      {statusOptions.map((label) => (
+                        <option key={label} value={label}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : filterField === 'totalScore' || filterField === 'interviewScore' ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="number"
+                        min="0"
+                        inputMode="numeric"
+                        placeholder="Min"
+                        value={filterField === 'totalScore' ? filters.totalScoreMin : filters.interviewScoreMin}
+                        onChange={(event) => updateFilter(
+                          filterField === 'totalScore' ? 'totalScoreMin' : 'interviewScoreMin',
+                          event.target.value,
+                        )}
+                        className={inputClass}
+                        aria-label={`${activeFilter.label} en az`}
+                      />
+                      <input
+                        type="number"
+                        min="0"
+                        inputMode="numeric"
+                        placeholder="Max"
+                        value={filterField === 'totalScore' ? filters.totalScoreMax : filters.interviewScoreMax}
+                        onChange={(event) => updateFilter(
+                          filterField === 'totalScore' ? 'totalScoreMax' : 'interviewScoreMax',
+                          event.target.value,
+                        )}
+                        className={inputClass}
+                        aria-label={`${activeFilter.label} en çok`}
+                      />
+                    </div>
+                  ) : (
+                    <>
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="search"
+                        value={filters[filterField]}
+                        onChange={(event) => {
+                          updateFilter(filterField, event.target.value)
+                          setSuggestOpen(Boolean(foldText(event.target.value)))
+                        }}
+                        onFocus={() => {
+                          if (foldText(filters[filterField])) setSuggestOpen(true)
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Escape') setSuggestOpen(false)
+                        }}
+                        placeholder={filterPlaceholder}
+                        className={`pl-9 ${inputClass}`}
+                        aria-label={filterPlaceholder}
+                        autoComplete="off"
+                      />
+                      {suggestOpen && filterSuggestions.length > 0 ? (
+                        <ul
+                          className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+                          role="listbox"
+                          aria-label={`${activeFilter.label} önerileri`}
+                        >
+                          {filterSuggestions.map((label) => (
+                            <li key={label}>
+                              <button
+                                type="button"
+                                role="option"
+                                className="flex w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                                onMouseDown={(event) => event.preventDefault()}
+                                onClick={() => {
+                                  updateFilter(filterField, label)
+                                  setSuggestOpen(false)
+                                }}
+                              >
+                                {label}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </>
+                  )}
+                </div>
               </div>
+              {filtersActive ? (
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {activeChips.map((chip) => (
+                    <span
+                      key={chip.id}
+                      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium ${
+                        chip.id === filterField
+                          ? 'border-blue-200 bg-blue-50 text-blue-700'
+                          : 'border-slate-200 bg-slate-50 text-slate-600'
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => handleFilterFieldChange(chip.id)}
+                        className="max-w-[16rem] truncate"
+                      >
+                        {chip.label}: {chip.value}
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`${chip.label} filtresini kaldır`}
+                        className="rounded-full p-0.5 hover:bg-white/80"
+                        onClick={() => clearFilter(chip.id)}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                  {activeChips.length > 1 ? (
+                    <button
+                      type="button"
+                      onClick={clearFilters}
+                      className="text-xs font-medium text-slate-500 transition hover:text-slate-700"
+                    >
+                      Tümünü temizle
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
             {pagedApplications.total === 0 ? (
               <div className="px-6 py-16 text-center">
                 <p className="text-sm font-medium text-slate-700">Bu filtreye uygun aday yok</p>
-                <p className="mt-1 text-sm text-slate-500">Farklı bir değer arayın veya filtreyi temizleyin.</p>
+                <p className="mt-1 text-sm text-slate-500">Filtreleri değiştirin veya temizleyin.</p>
               </div>
             ) : (
               <>
@@ -343,7 +507,7 @@ export default function ApplicationListPage() {
                               </span>
                             </td>
                             <td className="px-5 py-4">
-                              {canWriteAcademy ? (
+                              {canEvaluateAcademy ? (
                                 <button
                                   type="button"
                                   onClick={() => setStatusApp(row)}
@@ -373,7 +537,7 @@ export default function ApplicationListPage() {
                                   <Eye className="h-4 w-4" />
                                   Görüntüle
                                 </button>
-                                {canWriteAcademy ? (
+                                {canEvaluateAcademy ? (
                                   <button
                                     type="button"
                                     onClick={() => setEvaluation({ appId: row.academyAppId, readOnly: false })}
@@ -408,7 +572,7 @@ export default function ApplicationListPage() {
       </div>
 
       {/* Durum güncelle / görüntüle veya değerlendir */}
-      {statusApp && canWriteAcademy ? (
+      {statusApp && canEvaluateAcademy ? (
         <StatusModal
           application={statusApp}
           statuses={statuses}
@@ -424,7 +588,7 @@ export default function ApplicationListPage() {
         <EvaluationModal
           key={`${evaluation.appId}-${evaluation.readOnly ? 'view' : 'edit'}`}
           appId={evaluation.appId}
-          readOnly={evaluation.readOnly || !canWriteAcademy}
+          readOnly={evaluation.readOnly || !canEvaluateAcademy}
           statuses={statuses}
           onClose={() => setEvaluation(null)}
           onSaved={() => setRefreshKey((value) => value + 1)}

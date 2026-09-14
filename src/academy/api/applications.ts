@@ -145,6 +145,25 @@ export function updateAcademyAppStatus(
   })
 }
 
+export interface AcademyAppStatusHistory {
+  academyAppStHstrId: number
+  academyAppId: number
+  stId?: number | null
+  statusName?: string | null
+  prevStId?: number | null
+  prevStatusName?: string | null
+  changeReason?: string | null
+  changedAt?: string | null
+  changedByUserId?: string | null
+  changedByName?: string | null
+}
+
+export function getApplicationStatusHistory(
+  appId: number | string,
+): Promise<AcademyAppStatusHistory[]> {
+  return academyRequest<AcademyAppStatusHistory[]>(`/academy/applications/${appId}/status-history`)
+}
+
 export function getApplicationDetails(appId: number | string): Promise<ApplicationDetails> {
   return academyRequest<ApplicationDetails>(`/academy/applications/${appId}/details`)
 }

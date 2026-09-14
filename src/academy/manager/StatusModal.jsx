@@ -2,11 +2,16 @@
 import { useState } from 'react'
 import { X } from 'lucide-react'
 import { fullName, inputClass, useEscape } from './ui'
+import StatusHistoryModal, { StatusHistoryButton } from './StatusHistoryModal'
 
 export default function StatusModal({ application, statuses, saving, onClose, onSave }) {
   const [stId, setStId] = useState(application?.stId ? String(application.stId) : '')
   const [statusDescr, setStatusDescr] = useState(application?.statusDescr || '')
-  useEscape(onClose)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  useEscape(() => {
+    if (historyOpen) return
+    onClose()
+  })
 
   // Katalogda yoksa mevcut durumu options'a ekle.
   const options = [...statuses]
@@ -24,9 +29,12 @@ export default function StatusModal({ application, statuses, saving, onClose, on
   }
 
   return (
+    <>
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4"
-      onClick={onClose}
+      onClick={() => {
+        if (!historyOpen) onClose()
+      }}
     >
       <div
         className="w-full max-w-md overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl"
@@ -51,8 +59,13 @@ export default function StatusModal({ application, statuses, saving, onClose, on
 
         <form onSubmit={handleSubmit}>
           <div className="space-y-4 p-6">
-            <label className="block text-sm font-medium text-slate-700">
-              Durum
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-slate-700">Durum</span>
+                {application?.academyAppId ? (
+                  <StatusHistoryButton onClick={() => setHistoryOpen(true)} />
+                ) : null}
+              </div>
               <select
                 required
                 value={stId}
@@ -66,7 +79,7 @@ export default function StatusModal({ application, statuses, saving, onClose, on
                   </option>
                 ))}
               </select>
-            </label>
+            </div>
             <label className="block text-sm font-medium text-slate-700">
               Durum açıklaması
               <textarea
@@ -97,5 +110,12 @@ export default function StatusModal({ application, statuses, saving, onClose, on
         </form>
       </div>
     </div>
+    {historyOpen && application?.academyAppId ? (
+      <StatusHistoryModal
+        appId={application.academyAppId}
+        onClose={() => setHistoryOpen(false)}
+      />
+    ) : null}
+    </>
   )
 }

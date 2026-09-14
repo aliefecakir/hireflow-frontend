@@ -14,20 +14,11 @@ export const KIND_LABELS: Record<QuestionKind, string> = {
 
 const KIND_BY_SHRT_CODE: Record<string, QuestionKind> = {
   SINGLE_CHOICE: 'single',
-  SNGL: 'single',
-  SINGLE: 'single',
-  TSS: 'single',
   MULTIPLE_CHOICE: 'multi',
-  MULT: 'multi',
-  MULTI: 'multi',
-  CSS: 'multi',
-  OPEN: 'open',
-  TEXT: 'open',
-  AU: 'open',
+  MULTIPLE_CHOIC: 'multi',
+  OPEN_ENDED: 'open',
   FILE: 'file',
-  CV: 'file',
   DATE: 'date',
-  DT: 'date',
 }
 
 export interface QuestionChoice {
@@ -233,8 +224,44 @@ export function toFormDateTimeApi(value: unknown): string {
 
 // Form tarihleri: süresi doldu mu, başladı mı, adaya açık mı.
 export function parseFormDate(value: unknown): Date | null {
-  if (!value) return null
-  const parsed = new Date(String(value))
+  if (value == null || value === '') return null
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const parsed = new Date(value)
+    return Number.isNaN(parsed.getTime()) ? null : parsed
+  }
+  if (Array.isArray(value) && value.length >= 3) {
+    const [year, month, day, hour = 0, minute = 0, second = 0] = value.map(Number)
+    const parsed = new Date(year, month - 1, day, hour, minute, second)
+    return Number.isNaN(parsed.getTime()) ? null : parsed
+  }
+
+  const text = String(value).trim()
+  if (!text) return null
+
+  if (/[zZ]|[+-]\d{2}:\d{2}$/.test(text)) {
+    const parsed = new Date(text)
+    return Number.isNaN(parsed.getTime()) ? null : parsed
+  }
+
+  const naive = text.match(
+    /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?)?/,
+  )
+  if (naive) {
+    const parsed = new Date(
+      Number(naive[1]),
+      Number(naive[2]) - 1,
+      Number(naive[3]),
+      Number(naive[4] || 0),
+      Number(naive[5] || 0),
+      Number(naive[6] || 0),
+    )
+    return Number.isNaN(parsed.getTime()) ? null : parsed
+  }
+
+  const parsed = new Date(text)
   return Number.isNaN(parsed.getTime()) ? null : parsed
 }
 
@@ -251,7 +278,7 @@ export function hasFormStarted(
   now = new Date(),
 ): boolean {
   const start = parseFormDate(form?.sdate)
-  if (!start) return true
+  if (!start) return false
   return now.getTime() >= start.getTime()
 }
 

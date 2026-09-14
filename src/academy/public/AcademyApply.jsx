@@ -5,6 +5,7 @@ import { ArrowLeft, GraduationCap, Upload } from 'lucide-react'
 import PhoneInput, { isValidPhoneNumber } from 'react-phone-number-input'
 import 'react-phone-number-input/style.css'
 import { getDepartments, getUniversities } from '../api/catalog'
+import CatalogSearchSelect from './CatalogSearchSelect'
 import {
   applyToForm,
   getFormQuestions,
@@ -19,6 +20,7 @@ import {
   isFlagOn,
   isFormVisibleToCandidates,
   normalizeQuestionTypes,
+  parseFormDate,
 } from '../api/helpers'
 import { getQuestionTypes } from '../api/questions'
 import { getErrorMessage } from '../../shared/api/client'
@@ -111,9 +113,8 @@ const EMPTY_PROFILE = {
 }
 
 function formatDate(value) {
-  if (!value) return '—'
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return '—'
+  const parsed = parseFormDate(value)
+  if (!parsed) return '—'
   return parsed.toLocaleString('tr-TR', {
     day: 'numeric',
     month: 'long',
@@ -192,8 +193,8 @@ export default function AcademyApply() {
           return
         }
 
-        if (!hasFormStarted(matchedForm)) {
-          setApplyState('upcoming')
+        if (!canApplyToForm(matchedForm)) {
+          setApplyState(hasFormStarted(matchedForm) ? 'closed' : 'upcoming')
           setQuestions([])
           return
         }
@@ -393,6 +394,14 @@ export default function AcademyApply() {
       showToast.warning('Dikkat', 'Geçerli bir Türkiye telefon numarası girin.')
       return
     }
+    if (!profile.universityId) {
+      showToast.warning('Dikkat', 'Listeden bir üniversite seçin.')
+      return
+    }
+    if (!profile.departmentId) {
+      showToast.warning('Dikkat', 'Listeden bir bölüm seçin.')
+      return
+    }
 
     setProfile((prev) => ({ ...prev, name, surname }))
     setSubmitting(true)
@@ -536,36 +545,29 @@ export default function AcademyApply() {
                   </div>
                   {phoneError ? <p className="mt-1 text-xs text-red-600">{phoneError}</p> : null}
                 </div>
-                <label className="block text-sm font-medium text-slate-700">
+                <label htmlFor="university-search" className="block text-sm font-medium text-slate-700">
                   Üniversite
-                  {universities.length > 0 ? (
-                    <select name="universityId" required value={profile.universityId} onChange={updateProfile} className={`mt-2 ${inputClass}`}>
-                      <option value="">Seçiniz</option>
-                      {universities.map((item) => (
-                        <option key={item.id} value={item.id}>{item.name}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type="number"
-                      name="universityId"
-                      required
-                      min="1"
-                      value={profile.universityId}
-                      onChange={updateProfile}
-                      className={`mt-2 ${inputClass}`}
-                      placeholder="Üniversite numarası"
-                    />
-                  )}
+                  <CatalogSearchSelect
+                    id="university-search"
+                    options={universities}
+                    value={profile.universityId}
+                    onChange={(universityId) => setProfile((prev) => ({ ...prev, universityId }))}
+                    placeholder="Üniversitenizi aratın"
+                    noResultsLabel="Üniversite bulunamadı"
+                    inputClassName={inputClass}
+                  />
                 </label>
-                <label className="block text-sm font-medium text-slate-700">
+                <label htmlFor="department-search" className="block text-sm font-medium text-slate-700">
                   Bölüm
-                  <select name="departmentId" required value={profile.departmentId} onChange={updateProfile} className={`mt-2 ${inputClass}`}>
-                    <option value="">Seçiniz</option>
-                    {departments.map((item) => (
-                      <option key={item.id} value={item.id}>{item.name}</option>
-                    ))}
-                  </select>
+                  <CatalogSearchSelect
+                    id="department-search"
+                    options={departments}
+                    value={profile.departmentId}
+                    onChange={(departmentId) => setProfile((prev) => ({ ...prev, departmentId }))}
+                    placeholder="Bölümünüzü aratın"
+                    noResultsLabel="Bölüm bulunamadı"
+                    inputClassName={inputClass}
+                  />
                 </label>
               </div>
             </div>

@@ -22,6 +22,7 @@ import { getQuestionTypes } from '../api/questions'
 import { getErrorMessage } from '../../shared/api/client'
 import { showToast } from '../../shared/toast/ToastProvider'
 import { fullName, inputClass, LoadingState, ReadOnlyField, statusBadgeClass, useEscape, ConfirmDialog } from './ui'
+import StatusHistoryModal, { StatusHistoryButton } from './StatusHistoryModal'
 
 // Mülakat satırını date / open / single / multi çizer.
 function isInterviewDateCriterion(criterion, questionTypes = []) {
@@ -138,21 +139,34 @@ function ManualScoreField({ maxScore, value, onChange, onSave, saving, saved, re
   )
 }
 
-function CollapsibleSection({ title, hint, open, onToggle, children }) {
+function CollapsibleSection({ title, hint, open, onToggle, headerAction, children }) {
   return (
     <section className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-slate-100"
-        aria-expanded={open}
-      >
-        <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
-          {hint ? <p className="mt-0.5 text-xs text-slate-500">{hint}</p> : null}
-        </div>
-        <ChevronDown className={`h-5 w-5 shrink-0 text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
+      <div className="relative">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-slate-100"
+          aria-expanded={open}
+        >
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
+              {headerAction ? <span className="inline-block h-7 w-7 shrink-0" aria-hidden /> : null}
+            </div>
+            {hint ? <p className="mt-0.5 text-xs text-slate-500">{hint}</p> : null}
+          </div>
+          <ChevronDown className={`h-5 w-5 shrink-0 text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`} />
+        </button>
+        {headerAction ? (
+          <div className="pointer-events-none absolute inset-0 flex items-start px-5 py-4">
+            <div className="flex items-center gap-2">
+              <span className="invisible whitespace-nowrap text-sm font-semibold">{title}</span>
+              <div className="pointer-events-auto">{headerAction}</div>
+            </div>
+          </div>
+        ) : null}
+      </div>
       {open ? (
         <div className="space-y-4 border-t border-slate-200 px-5 pb-5 pt-4">
           {children}
@@ -237,6 +251,7 @@ export default function EvaluationModal({ appId, onClose, onSaved, statuses: sta
   const [questionTypes, setQuestionTypes] = useState([])
   const [stId, setStId] = useState('')
   const [statusDescr, setStatusDescr] = useState('')
+  const [historyOpen, setHistoryOpen] = useState(false)
   const [confirmAction, setConfirmAction] = useState(null)
   const onCloseRef = useRef(onClose)
   const baselineRef = useRef('')
@@ -261,6 +276,7 @@ export default function EvaluationModal({ appId, onClose, onSaved, statuses: sta
   }
 
   useEscape(() => {
+    if (historyOpen) return
     if (confirmActionRef.current) return
     requestClose()
   })
@@ -502,7 +518,10 @@ export default function EvaluationModal({ appId, onClose, onSaved, statuses: sta
     <>
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
-      onClick={requestClose}
+      onClick={() => {
+        if (historyOpen) return
+        requestClose()
+      }}
     >
       <div
         className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl"
@@ -887,6 +906,9 @@ export default function EvaluationModal({ appId, onClose, onSaved, statuses: sta
                 hint={selectedStatus?.name || undefined}
                 open={openSections.status}
                 onToggle={() => toggleSection('status')}
+                headerAction={(
+                  <StatusHistoryButton onClick={() => setHistoryOpen(true)} />
+                )}
               >
                 {readOnly ? (
                   <>
@@ -992,6 +1014,9 @@ export default function EvaluationModal({ appId, onClose, onSaved, statuses: sta
           performSave()
         }}
       />
+    ) : null}
+    {historyOpen ? (
+      <StatusHistoryModal appId={appId} onClose={() => setHistoryOpen(false)} />
     ) : null}
     </>
   )
