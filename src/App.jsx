@@ -19,6 +19,7 @@ import ApplicationListPage from './academy/manager/ApplicationListPage'
 import CatalogScorePage from './academy/manager/CatalogScorePage'
 import AdminPanelPage from './academy/manager/AdminPanelPage'
 import Login from './shared/Login'
+import AuthCallback from './shared/AuthCallback'
 import Register from './shared/Register'
 import CandidateLayout from './hire/CandidateLayout'
 import CandidateJobs from './hire/CandidateJobs'
@@ -41,6 +42,8 @@ export default function App() {
               <Login />
             </AuthLayout>
           } />
+
+          <Route path="/auth/callback" element={<AuthCallback />} />
 
           <Route path="/hr/login" element={
             <AuthLayout>

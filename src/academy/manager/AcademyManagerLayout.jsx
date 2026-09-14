@@ -133,7 +133,7 @@ function AcademyManagerShell() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-gray-100" onClickCapture={handleLinkClickCapture}>
+    <div className="flex h-screen flex-col overflow-hidden bg-gray-100" onClickCapture={handleLinkClickCapture}>
       <header className="w-full flex-shrink-0 border-b border-gray-200 bg-white shadow-sm">
         <div className="flex h-12 items-center justify-between px-6">
           <Link to="/" className="group flex items-center space-x-2">
@@ -178,26 +178,15 @@ function AcademyManagerShell() {
                   </svg>
                   <span>Çıkış Yap</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowProfileMenu(false)
-                    setShowAbout(true)
-                  }}
-                  className="flex w-full items-center space-x-2 px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
-                >
-                  <Info className="h-4 w-4" />
-                  <span>Hakkında</span>
-                </button>
               </div>
             ) : null}
           </div>
         </div>
       </header>
 
-      <div className="flex flex-1 overflow-hidden">
-        <aside className="flex w-60 flex-shrink-0 flex-col overflow-y-auto border-r border-gray-200 bg-white">
-          <nav className="flex flex-1 flex-col p-4 pb-10">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <aside className="flex min-h-0 w-60 flex-shrink-0 flex-col overflow-y-auto border-r border-gray-200 bg-white">
+          <nav className="flex min-h-0 flex-1 flex-col p-4">
             <ul className="space-y-1">
               {primaryItems.map((item) => (
                 <li key={item.id}>
@@ -205,19 +194,31 @@ function AcademyManagerShell() {
                 </li>
               ))}
             </ul>
-            {bottomItems.length > 0 ? (
-              <ul className="mt-auto space-y-1 border-t border-slate-200 pt-3">
-                {bottomItems.map((item) => (
-                  <li key={item.id}>
-                    <MenuLink item={item} pathname={pathname} />
-                  </li>
-                ))}
-              </ul>
-            ) : null}
+            <ul className="mt-auto space-y-1 border-t border-slate-200 pt-3">
+              {bottomItems.map((item) => (
+                <li key={item.id}>
+                  <MenuLink item={item} pathname={pathname} />
+                </li>
+              ))}
+              <li>
+                <button
+                  type="button"
+                  onClick={() => setShowAbout(true)}
+                  className={`flex w-full items-center space-x-3 rounded-lg px-4 py-3 text-left text-sm font-medium transition-all duration-200 ${
+                    showAbout
+                      ? 'bg-blue-50 text-blue-700 shadow-sm'
+                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
+                >
+                  <Info className={`h-5 w-5 ${showAbout ? 'text-blue-600' : 'text-slate-400'}`} />
+                  <span>Hakkında</span>
+                </button>
+              </li>
+            </ul>
           </nav>
         </aside>
 
-        <main className="flex-1 overflow-y-auto bg-gray-50 p-6">
+        <main className="min-h-0 flex-1 overflow-y-auto bg-gray-50 p-6">
           {/* Alt sayfa: forms, create, pool, applications */}
           <Outlet />
         </main>

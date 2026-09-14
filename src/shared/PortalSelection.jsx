@@ -34,7 +34,7 @@ function PortalHeader() {
         provider: 'azure',
         options: {
           scopes: 'email profile openid User.Read',
-          redirectTo: `${window.location.origin}/login`,
+          redirectTo: `${window.location.origin}/auth/callback`,
         },
       })
 

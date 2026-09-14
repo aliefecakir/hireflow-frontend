@@ -28,22 +28,17 @@ export default function AboutModal({ onClose }) {
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl"
+        className="w-full max-w-lg overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 p-6">
           <div className="flex items-center gap-3">
             <BrandMark className="h-10 w-10" />
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg font-bold text-slate-800">HireFlow</h2>
-                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium tabular-nums text-slate-600">
-                  {APP_VERSION}
-                </span>
-              </div>
-              <p className="mt-0.5 text-sm text-slate-500">
-                İşe alım ve akademi başvuru süreçleri yönetim platformu
-              </p>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-bold text-slate-800">HireFlow</h2>
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium tabular-nums text-slate-600">
+                {APP_VERSION}
+              </span>
             </div>
           </div>
           <button
@@ -56,13 +51,24 @@ export default function AboutModal({ onClose }) {
           </button>
         </div>
 
-        <div className="p-6">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Oturum Bilgisi
-          </p>
-          <div className="mt-2 divide-y divide-slate-100">
-            <InfoRow label="Kullanıcı" value={displayName(userProfile)} />
-            <InfoRow label="E-posta" value={userProfile?.email} />
+        <div className="space-y-6 p-6">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">
+            <p className="text-sm leading-relaxed text-slate-700">
+              HireFlow, şirketler ile yetenekleri buluşturan yeni nesil bir işe alım platformudur.
+            </p>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600">
+              Kariyer ilanlarını ve akademi programlarını tek noktada toplayarak başvuru süreçlerini
+              hızlı ve şeffaf hale getirir.
+            </p>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Oturum Bilgisi
+            </p>
+            <div className="mt-2 divide-y divide-slate-100">
+              <InfoRow label="Kullanıcı" value={displayName(userProfile)} />
+              <InfoRow label="E-posta" value={userProfile?.email} />
+            </div>
           </div>
         </div>
 
