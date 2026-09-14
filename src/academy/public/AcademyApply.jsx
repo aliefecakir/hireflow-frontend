@@ -58,7 +58,6 @@ async function assertAcademyCvFile(file) {
   }
 }
 
-// PDF CV → Supabase academy-files, public URL döner.
 async function uploadAcademyCv(formId, file) {
   await assertAcademyCvFile(file)
 
@@ -477,7 +476,7 @@ export default function AcademyApply() {
             <div className="rounded-2xl bg-white p-6 shadow-md sm:p-8">
               <h1 className="text-2xl font-bold text-slate-900">{formTitle}</h1>
               <p className="mt-2 text-sm text-slate-500">
-                Kişisel bilgilerinizi doldurun. Bu formda yalnızca aday soruları görünür.
+                Lütfen kişisel bilgilerinizi doldurunuz.
               </p>
 
               <div className="mt-6 grid gap-4 sm:grid-cols-2">
