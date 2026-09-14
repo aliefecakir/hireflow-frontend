@@ -88,7 +88,7 @@ export default function Login() {
       }
 
       setAccessToken(data.session.access_token)
-      // Profil tek yerden çekilsin: AuthContext SIGNED_IN. Çift /users/me 500'e yol açıyordu.
+      
     } catch (err) {
       console.error('Giriş isteği başarısız:', err)
       showToast.error('Hata Oluştu', getErrorMessage(err) || 'Invalid email or password.')

@@ -1,7 +1,7 @@
 // Soru oluştur / düzenle / sil. Kullanımdaysa metin kilitlenir.
 import { useEffect, useRef, useState } from 'react'
 import { Plus, Trash2, X } from 'lucide-react'
-import { getChoiceId, getQuestionKind, isFlagOn, toFlag } from '../api/helpers'
+import { getChoiceId, getQuestionKind, isFlagOn, isManualMaxScoreKind, toFlag } from '../api/helpers'
 import { showToast } from '../../shared/toast/ToastProvider'
 import { ConfirmDialog, createEmptyChoice, inputClass, useEscape } from './ui'
 
@@ -153,10 +153,11 @@ export default function QuestionModal({
   const selectedType = questionTypes.find((item) => String(item.id) === String(tpId))
   const kind = selectedType ? getQuestionKind(selectedType, questionTypes) : null
   const isChoiceType = kind === 'single' || kind === 'multi'
-  const isOpenType = kind === 'open'
+  const isNumericType = kind === 'numeric'
   const isFileType = kind === 'file'
   const isDateType = kind === 'date'
   const isPlainAnswerType = isFileType || isDateType
+  const needsMaxScore = isManualMaxScoreKind(kind)
 
   const handleTypeChange = (nextTpId) => {
     if (!canEditContent) return
@@ -235,8 +236,8 @@ export default function QuestionModal({
     }
 
     const parsedMaxScore = Number(maxScore)
-    if (isOpenType && (!Number.isFinite(parsedMaxScore) || parsedMaxScore < 0)) {
-      showToast.warning('Dikkat', 'Açık uçlu soru için geçerli bir max puan girin.')
+    if (needsMaxScore && (!Number.isFinite(parsedMaxScore) || parsedMaxScore < 0)) {
+      showToast.warning('Dikkat', 'Bu soru için geçerli bir max puan girin.')
       return null
     }
 
@@ -534,7 +535,7 @@ export default function QuestionModal({
               </div>
             ) : null}
 
-            {isOpenType ? (
+            {needsMaxScore ? (
               <label className="block text-sm font-medium text-slate-700">
                 Max Puan
                 <input
@@ -546,6 +547,11 @@ export default function QuestionModal({
                   className={`mt-2 ${inputClass}`}
                   placeholder="Örn: 10"
                 />
+                {isNumericType ? (
+                  <span className="mt-1.5 block text-xs font-normal text-slate-500">
+                    Aday yalnızca rakam girebilir. Puanı değerlendirmede siz verirsiniz.
+                  </span>
+                ) : null}
               </label>
             ) : null}
 

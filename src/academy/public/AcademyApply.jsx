@@ -17,10 +17,13 @@ import {
   getChoiceId,
   getQuestionKind,
   hasFormStarted,
+  isDigitOnly,
   isFlagOn,
   isFormVisibleToCandidates,
+  isFreeTextAnswerKind,
   normalizeQuestionTypes,
   parseFormDate,
+  sanitizeDigitInput,
 } from '../api/helpers'
 import { getQuestionTypes } from '../api/questions'
 import { getErrorMessage } from '../../shared/api/client'
@@ -49,7 +52,7 @@ async function assertAcademyCvFile(file) {
     throw new Error('Yalnızca PDF dosyası yüklenebilir.')
   }
   if (file.size > MAX_CV_BYTES) {
-    throw new Error('CV en fazla 5 MB olabilir.')
+    throw new Error('CV En fazla 5 MB olabilir.')
   }
   const header = new Uint8Array(await file.slice(0, 5).arrayBuffer())
   const signature = String.fromCharCode(...header)
@@ -271,7 +274,7 @@ export default function AcademyApply() {
       const current = answers[questionId] || {}
       const required = isFlagOn(question.isReq)
 
-      if (kind === 'open' || kind === 'file' || kind === 'date') {
+      if (isFreeTextAnswerKind(kind)) {
         const answerText = String(current.text || '').trim()
         if (!answerText) {
           if (required) {
@@ -280,10 +283,15 @@ export default function AcademyApply() {
                 ? 'Lütfen zorunlu CV sorusuna dosya yükleyin.'
                 : kind === 'date'
                   ? 'Lütfen zorunlu tarih sorusunu doldurun.'
-                  : 'Lütfen zorunlu açık uçlu soruları yanıtlayın.',
+                  : kind === 'numeric'
+                    ? 'Lütfen zorunlu sayı sorusunu doldurun.'
+                    : 'Lütfen zorunlu açık uçlu soruları yanıtlayın.',
             )
           }
           continue
+        }
+        if (kind === 'numeric' && !isDigitOnly(answerText)) {
+          throw new Error('Sayı sorusuna yalnızca rakam girebilirsiniz.')
         }
         payload.push({ questionId, answerText })
         continue
@@ -626,6 +634,25 @@ export default function AcademyApply() {
                           onChange={(event) => setAnswerField(question.questionId, 'text', event.target.value)}
                           className={`mt-4 resize-none ${inputClass}`}
                           placeholder="Cevabınızı yazın"
+                        />
+                      ) : kind === 'numeric' ? (
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          autoComplete="off"
+                          required={isFlagOn(question.isReq)}
+                          value={current.text || ''}
+                          onChange={(event) => {
+                            setAnswerField(question.questionId, 'text', sanitizeDigitInput(event.target.value))
+                          }}
+                          onPaste={(event) => {
+                            event.preventDefault()
+                            const pasted = event.clipboardData.getData('text')
+                            setAnswerField(question.questionId, 'text', sanitizeDigitInput(pasted))
+                          }}
+                          className={`mt-4 ${inputClass}`}
+                          placeholder="Yalnızca sayı girin"
                         />
                       ) : (
                         <div className="mt-4 space-y-2">

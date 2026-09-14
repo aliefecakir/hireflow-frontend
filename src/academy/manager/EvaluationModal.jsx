@@ -17,6 +17,7 @@ import {
   getSelectedChoiceIds,
   isFlagOn,
   normalizeQuestionTypes,
+  sanitizeDigitInput,
 } from '../api/helpers'
 import { getQuestionTypes } from '../api/questions'
 import { getErrorMessage } from '../../shared/api/client'
@@ -35,6 +36,7 @@ function getInterviewRenderKind(criterion, questionTypes = []) {
   const kind = getQuestionKind(criterion, questionTypes)
   const choiceCount = Array.isArray(criterion?.choices) ? criterion.choices.length : 0
   if (isInterviewDateCriterion(criterion, questionTypes) || kind === 'date') return 'date'
+  if (kind === 'numeric') return 'numeric'
   if (kind === 'open') return 'open'
   if (choiceCount === 0) return 'open'
   if (kind === 'multi') return 'multi'
@@ -366,7 +368,7 @@ export default function EvaluationModal({ appId, onClose, onSaved, statuses: sta
 
     for (const criterion of criteria) {
       const renderKind = getInterviewRenderKind(criterion, questionTypes)
-      if (renderKind === 'date' || renderKind === 'open') {
+      if (renderKind === 'date' || renderKind === 'open' || renderKind === 'numeric') {
         const answerText = String(texts[criterion.questionId] || '').trim()
         if (answerText) {
           payload.push({ questionId: criterion.questionId, answerText })
@@ -693,6 +695,25 @@ export default function EvaluationModal({ appId, onClose, onSaved, statuses: sta
                             >
                               CV’yi aç
                             </a>
+                          ) : isOpenEnded && kind === 'numeric' ? (
+                            <>
+                              <input
+                                type="text"
+                                readOnly
+                                inputMode="numeric"
+                                value={answer.answerText || ''}
+                                className={`mt-3 bg-white ${inputClass}`}
+                              />
+                              <ManualScoreField
+                                maxScore={manualMax}
+                                value={currentManualScore}
+                                onChange={setManualScore}
+                                onSave={() => handleSaveManualScore(answer)}
+                                saving={savingQuestionId === answer.questionId}
+                                saved={manualSaved}
+                                readOnly={readOnly}
+                              />
+                            </>
                           ) : isOpenEnded ? (
                             <>
                               <textarea
@@ -801,7 +822,7 @@ export default function EvaluationModal({ appId, onClose, onSaved, statuses: sta
                         (a, b) => (Number(a.ordNo) || 0) - (Number(b.ordNo) || 0),
                       )
                       const renderKind = getInterviewRenderKind(criterion, questionTypes)
-                      const hasAutoChoiceScore = renderKind !== 'date' && renderKind !== 'open'
+                      const hasAutoChoiceScore = renderKind !== 'date' && renderKind !== 'open' && renderKind !== 'numeric'
                         && scores[criterion.questionId] != null && scores[criterion.questionId] !== ''
                       const setText = (value) => setTexts((prev) => ({
                         ...prev,
@@ -846,6 +867,22 @@ export default function EvaluationModal({ appId, onClose, onSaved, statuses: sta
                               }}
                               className={`mt-3 resize-none ${readOnly ? 'bg-slate-50' : ''} ${inputClass}`}
                               placeholder={readOnly ? '' : 'Değerlendirmenizi yazın'}
+                            />
+                          ) : renderKind === 'numeric' ? (
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              autoComplete="off"
+                              readOnly={readOnly}
+                              disabled={readOnly}
+                              value={texts[criterion.questionId] || ''}
+                              onChange={(event) => {
+                                if (readOnly) return
+                                setText(sanitizeDigitInput(event.target.value))
+                              }}
+                              className={`mt-3 ${readOnly ? 'bg-slate-50' : ''} ${inputClass}`}
+                              placeholder={readOnly ? '' : 'Yalnızca sayı girin'}
                             />
                           ) : (
                             <div className="mt-3 flex flex-col gap-2">

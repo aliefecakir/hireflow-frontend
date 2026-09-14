@@ -2,12 +2,13 @@
 export const PAGE_SIZE_OPTIONS = [10, 20, 50] as const
 export const DEFAULT_PAGE_SIZE = 10
 
-export type QuestionKind = 'single' | 'multi' | 'open' | 'file' | 'date'
+export type QuestionKind = 'single' | 'multi' | 'open' | 'numeric' | 'file' | 'date'
 
 export const KIND_LABELS: Record<QuestionKind, string> = {
   single: 'Çoktan Seçmeli(Tek Cevaplı)',
   multi: 'Çoktan Seçmeli(Çok Cevaplı)',
   open: 'Açık Uçlu',
+  numeric: 'Sayı Girişi',
   file: 'CV',
   date: 'Tarih',
 }
@@ -17,6 +18,7 @@ const KIND_BY_SHRT_CODE: Record<string, QuestionKind> = {
   MULTIPLE_CHOICE: 'multi',
   MULTIPLE_CHOIC: 'multi',
   OPEN_ENDED: 'open',
+  NUMERIC: 'numeric',
   FILE: 'file',
   DATE: 'date',
 }
@@ -82,7 +84,29 @@ type KindSource = {
 }
 
 function isQuestionKind(value: unknown): value is QuestionKind {
-  return value === 'single' || value === 'multi' || value === 'open' || value === 'file' || value === 'date'
+  return value === 'single'
+    || value === 'multi'
+    || value === 'open'
+    || value === 'numeric'
+    || value === 'file'
+    || value === 'date'
+}
+
+// Harf ve özel karakterleri atar; yalnızca 0-9 kalır.
+export function sanitizeDigitInput(value: unknown): string {
+  return String(value ?? '').replace(/\D+/g, '')
+}
+
+export function isDigitOnly(value: unknown): boolean {
+  return /^\d+$/.test(String(value ?? '').trim())
+}
+
+export function isManualMaxScoreKind(kind: QuestionKind | null | undefined): boolean {
+  return kind === 'open' || kind === 'numeric'
+}
+
+export function isFreeTextAnswerKind(kind: QuestionKind | null | undefined): boolean {
+  return kind === 'open' || kind === 'numeric' || kind === 'file' || kind === 'date'
 }
 
 function kindFromCode(value: unknown): QuestionKind | null {

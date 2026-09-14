@@ -308,6 +308,7 @@ function typeBadgeClass(kind) {
   if (kind === 'multi') return 'bg-violet-50 text-violet-700'
   if (kind === 'file') return 'bg-sky-50 text-sky-700'
   if (kind === 'date') return 'bg-teal-50 text-teal-700'
+  if (kind === 'numeric') return 'bg-amber-50 text-amber-700'
   return 'bg-slate-100 text-slate-700'
 }
 
